@@ -1,0 +1,6 @@
+pandas
+xlwings
+openpyxl
+pywin32
+Gooey==1.0.8.1
+colored==1.4.4 

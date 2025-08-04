@@ -1,0 +1,1 @@
+# DirectoryGeneratorApp Core Module
