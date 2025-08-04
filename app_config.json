@@ -7,8 +7,8 @@
     "output_folder": "F:/CODE/data/录入/转换/测试"
   },
   "last_recipe": "简化目录",
-  "last_height_method": "pillow",
-  "window_geometry": "850x650+312+312",
+  "last_height_method": "gdi",
+  "window_geometry": "1386x929+312+312",
   "options": {
     "start_file": "",
     "end_file": ""

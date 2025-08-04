@@ -26,12 +26,137 @@ class ConfigManager:
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
+                    config_data = json.load(f)
+                
+                # 验证配置文件结构
+                if self._validate_config_structure(config_data):
+                    return config_data
+                else:
+                    print(f"配置文件结构无效，使用默认配置: {self.config_file}")
+                    return self._get_default_config()
+                    
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
                 print(f"加载配置文件失败: {e}")
         
         # 返回默认配置
         return self._get_default_config()
+    
+    def _validate_config_structure(self, config: Dict[str, Any]) -> bool:
+        """
+        验证配置文件结构的完整性和安全性
+        
+        Args:
+            config: 要验证的配置字典
+            
+        Returns:
+            bool: 配置是否有效
+        """
+        if not isinstance(config, dict):
+            return False
+        
+        # 定义必需的配置字段和类型
+        required_schema = {
+            "paths": dict,
+            "last_recipe": str,
+            "last_height_method": str,
+            "window_geometry": str,
+            "options": dict
+        }
+        
+        # 检查必需字段
+        for key, expected_type in required_schema.items():
+            if key not in config:
+                print(f"缺少必需的配置字段: {key}")
+                return False
+            
+            if not isinstance(config[key], expected_type):
+                print(f"配置字段类型错误: {key}, 期望 {expected_type.__name__}, 实际 {type(config[key]).__name__}")
+                return False
+        
+        # 验证路径配置
+        if not self._validate_paths_config(config["paths"]):
+            return False
+        
+        # 验证recipe值
+        valid_recipes = ["卷内目录", "案卷目录", "全引目录", "简化目录"]
+        if config["last_recipe"] not in valid_recipes:
+            print(f"无效的last_recipe值: {config['last_recipe']}")
+            return False
+        
+        # 验证行高方案
+        valid_methods = ["xlwings", "gdi", "pillow"]
+        if config["last_height_method"] not in valid_methods:
+            print(f"无效的last_height_method值: {config['last_height_method']}")
+            return False
+        
+        # 验证窗口几何字符串格式
+        if not self._validate_geometry_string(config["window_geometry"]):
+            return False
+        
+        return True
+    
+    def _validate_paths_config(self, paths: Dict[str, str]) -> bool:
+        """验证路径配置的安全性"""
+        if not isinstance(paths, dict):
+            return False
+        
+        expected_path_keys = {
+            "jn_catalog_path", "aj_catalog_path", "jh_catalog_path", 
+            "template_path", "output_folder"
+        }
+        
+        # 检查是否包含预期的路径键
+        for key in expected_path_keys:
+            if key not in paths:
+                print(f"缺少路径配置: {key}")
+                return False
+            
+            path_value = paths[key]
+            if not isinstance(path_value, str):
+                print(f"路径值类型错误: {key}")
+                return False
+            
+            # 如果路径不为空，验证其安全性
+            if path_value and not self._is_safe_path(path_value):
+                print(f"不安全的路径配置: {key} = {path_value}")
+                return False
+        
+        return True
+    
+    def _is_safe_path(self, path: str) -> bool:
+        """检查路径是否安全"""
+        if not path:
+            return True  # 空路径是安全的
+        
+        try:
+            # 检查是否包含危险字符或模式
+            dangerous_patterns = ['../', '..\\', '<', '>', '|', '*', '?']
+            for pattern in dangerous_patterns:
+                if pattern in path:
+                    return False
+            
+            # 检查路径长度
+            if len(path) > 260:  # Windows路径长度限制
+                return False
+            
+            # 尝试解析路径（不实际访问文件系统）
+            from pathlib import Path
+            Path(path)  # 这会验证路径格式但不访问文件
+            
+            return True
+            
+        except (ValueError, OSError):
+            return False
+    
+    def _validate_geometry_string(self, geometry: str) -> bool:
+        """验证窗口几何字符串格式"""
+        if not isinstance(geometry, str):
+            return False
+        
+        # 基本格式检查：宽x高 或 宽x高+x+y
+        import re
+        pattern = r'^\d+x\d+(\+\d+\+\d+)?$'
+        return bool(re.match(pattern, geometry))
     
     def _get_default_config(self) -> Dict[str, Any]:
         """获取默认配置"""

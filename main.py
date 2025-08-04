@@ -22,6 +22,7 @@ from core.enhanced_height_calculator import (
     get_available_methods
 )
 from utils.config_manager import get_config_manager
+from utils.file_validator import validate_excel_file, validate_output_directory
 
 
 class QueueHandler(logging.Handler):
@@ -48,6 +49,10 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 初始化配置管理器
         self.config_manager = get_config_manager()
+        
+        # 初始化线程管理
+        self.current_task_thread = None
+        self.shutdown_flag = threading.Event()
         
         self.title("统一目录生成器 v4.0 (Tkinter版)")
         
@@ -402,10 +407,26 @@ class DirectoryGeneratorGUI(tk.Tk):
     def on_closing(self):
         """窗口关闭时的处理"""
         try:
+            # 设置关闭标志
+            self.shutdown_flag.set()
+            
+            # 如果有任务正在运行，询问用户是否要等待
+            if self.current_task_thread and self.current_task_thread.is_alive():
+                if messagebox.askyesno("任务进行中", 
+                                     "有任务正在运行，是否等待任务完成？\n"
+                                     "选择'否'将强制关闭程序（可能导致数据丢失）"):
+                    # 等待任务完成
+                    logging.info("等待任务完成...")
+                    self.current_task_thread.join(timeout=30)  # 最多等待30秒
+                    
+                    if self.current_task_thread.is_alive():
+                        messagebox.showwarning("警告", "任务仍在运行，强制关闭程序")
+            
             # 保存窗口几何信息
             geometry = self.geometry()
             self.config_manager.set_window_geometry(geometry)
             self.config_manager.save_config()
+            
         except Exception as e:
             logging.warning(f"保存配置失败: {e}")
         finally:
@@ -415,6 +436,17 @@ class DirectoryGeneratorGUI(tk.Tk):
         """打开文件/文件夹对话框并更新输入框。"""
         if is_directory:
             path = filedialog.askdirectory()
+            if path:
+                # 验证目录路径安全性
+                if validate_output_directory(path):
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, path)
+                    # 保存到配置
+                    self.config_manager.set_path(path_key, path)
+                    self.config_manager.save_config()
+                    logging.info(f"已选择输出目录: {path}")
+                else:
+                    messagebox.showerror("路径错误", "选择的目录不存在或没有写入权限")
         else:
             path = filedialog.askopenfilename(
                 filetypes=[
@@ -422,12 +454,19 @@ class DirectoryGeneratorGUI(tk.Tk):
                     ("所有文件", "*.*"),
                 ]
             )
-        if path:
-            entry_widget.delete(0, tk.END)
-            entry_widget.insert(0, path)
-            # 保存到配置
-            self.config_manager.set_path(path_key, path)
-            self.config_manager.save_config()
+            if path:
+                # 验证文件路径安全性
+                if validate_excel_file(path):
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, path)
+                    # 保存到配置
+                    self.config_manager.set_path(path_key, path)
+                    self.config_manager.save_config()
+                    logging.info(f"已选择文件: {path}")
+                else:
+                    messagebox.showerror("文件错误", 
+                                       "选择的文件不存在、格式不支持或文件过大\n"
+                                       "请选择有效的Excel文件（.xlsx或.xls，小于100MB）")
 
     def reset_config(self):
         """重置所有配置到默认值"""
@@ -455,10 +494,21 @@ class DirectoryGeneratorGUI(tk.Tk):
 
     def run_generation_thread(self):
         """在单独的线程中启动目录生成任务，以防UI冻结。"""
+        # 检查是否有任务正在运行
+        if self.current_task_thread and self.current_task_thread.is_alive():
+            messagebox.showwarning("任务进行中", "已有任务正在运行，请等待完成后再启动新任务")
+            return
+        
         self.start_button.config(state="disabled", text="正在生成...")
-        thread = threading.Thread(target=self.generation_controller)
-        thread.daemon = True
-        thread.start()
+        
+        # 创建并启动新的工作线程
+        self.current_task_thread = threading.Thread(
+            target=self.generation_controller, 
+            name="GenerationWorker"
+        )
+        # 不设置为守护线程，确保任务完成
+        self.current_task_thread.daemon = False
+        self.current_task_thread.start()
 
     def generation_controller(self):
         """
@@ -553,9 +603,39 @@ class DirectoryGeneratorGUI(tk.Tk):
             except Exception as e:
                 logging.warning(f"显示性能统计失败: {e}")
 
+        except FileNotFoundError as e:
+            error_msg = f"文件不存在: {e}"
+            logging.error(error_msg)
+            messagebox.showerror("文件错误", error_msg)
+        except PermissionError as e:
+            error_msg = f"文件权限不足: {e}"
+            logging.error(error_msg)
+            messagebox.showerror("权限错误", error_msg)
+        except ValueError as e:
+            error_msg = f"参数错误: {e}"
+            logging.error(error_msg)
+            messagebox.showerror("参数错误", error_msg)
+        except ImportError as e:
+            error_msg = f"模块导入失败: {e}\n请检查依赖项是否正确安装"
+            logging.error(error_msg)
+            messagebox.showerror("依赖错误", error_msg)
+        except RuntimeError as e:
+            error_msg = f"运行时错误: {e}"
+            logging.error(error_msg)
+            messagebox.showerror("运行错误", error_msg)
+        except OSError as e:
+            error_msg = f"系统操作失败: {e}"
+            logging.error(error_msg)
+            messagebox.showerror("系统错误", error_msg)
         except Exception as e:
-            logging.error(f"发生未知错误: {e}")
-            messagebox.showerror("严重错误", f"发生了一个意外错误:\n{e}")
+            # 记录详细的错误信息用于调试
+            import traceback
+            error_details = traceback.format_exc()
+            logging.error(f"未处理的异常: {error_details}")
+            
+            # 向用户显示简化的错误信息
+            user_msg = f"发生意外错误，请检查日志获取详细信息\n错误类型: {type(e).__name__}"
+            messagebox.showerror("意外错误", user_msg)
         finally:
             self.start_button.config(state="normal", text="开始生成")
 
