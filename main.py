@@ -68,7 +68,8 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.queue_handler = QueueHandler(self.log_queue)
         logging.basicConfig(
             level=logging.INFO,
-            format="%(asctime)s - %(levelname)s - %(message)s",
+            format="%(asctime)s - %(message)s",
+            datefmt="%H:%M:%S",
             handlers=[self.queue_handler],
         )
 
@@ -88,32 +89,37 @@ class DirectoryGeneratorGUI(tk.Tk):
 
     def create_widgets(self):
         """创建并布局所有的UI控件。"""
-        main_frame = ttk.Frame(self, padding="10")
+        main_frame = ttk.Frame(self, padding="5")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # --- 目录类型选择 ---
-        type_frame = ttk.LabelFrame(main_frame, text="1. 选择目录类型", padding="10")
-        type_frame.pack(fill=tk.X, expand=True)
+        # --- 顶部区域：目录类型和行高计算方案 ---
+        top_frame = ttk.Frame(main_frame)
+        top_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
+        
+        # 左侧：目录类型选择
+        type_frame = ttk.LabelFrame(top_frame, text="1. 目录类型", padding="5")
+        type_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         self.recipe_var = tk.StringVar()
         self.recipe_combo = ttk.Combobox(
             type_frame,
             textvariable=self.recipe_var,
             values=["卷内目录", "案卷目录", "全引目录", "简化目录"],
             state="readonly",
+            height=4
         )
         self.recipe_combo.pack(fill=tk.X, expand=True)
         self.recipe_combo.current(0)
 
-        # --- 行高计算方案选择 ---
-        height_frame = ttk.LabelFrame(main_frame, text="2. 选择行高计算方案", padding="10")
-        height_frame.pack(fill=tk.X, expand=True, pady=5)
+        # 右侧：行高计算方案选择
+        height_frame = ttk.LabelFrame(top_frame, text="2. 行高计算方案", padding="5")
+        height_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         
         # 获取可用方案
         available_methods = get_available_methods()
         method_display_names = {
-            'xlwings': 'xlwings (原始AutoFit，可能溢出)',
-            'gdi': 'GDI (Windows精确测量，完美精度)',
-            'pillow': 'Pillow (独立计算，高精度)'
+            'xlwings': 'xlwings (原始AutoFit)',
+            'gdi': 'GDI (Windows精确测量)',
+            'pillow': 'Pillow (独立计算)'
         }
         
         method_values = [method_display_names.get(method, method) for method in available_methods]
@@ -124,9 +130,10 @@ class DirectoryGeneratorGUI(tk.Tk):
             textvariable=self.height_method_var,
             values=method_values,
             state="readonly",
+            height=3
         )
         self.height_method_combo.pack(fill=tk.X, expand=True)
-        self.height_method_combo.current(0)  # 默认选择第一个（xlwings）
+        self.height_method_combo.current(0)
         
         # 绑定选择变化事件
         self.height_method_combo.bind('<<ComboboxSelected>>', self.on_height_method_changed)
@@ -135,19 +142,10 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 存储方案映射
         self.available_methods = available_methods
         self.method_display_names = method_display_names
-        
-        # 添加说明标签
-        info_label = ttk.Label(
-            height_frame, 
-            text="提示：GDI方案精度最高，Pillow方案部署简单，xlwings方案速度最快",
-            font=("", 8),
-            foreground="gray"
-        )
-        info_label.pack(fill=tk.X, pady=(5, 0))
 
         # --- 路径配置 ---
-        self.path_frame = ttk.LabelFrame(main_frame, text="3. 配置路径", padding="10")
-        self.path_frame.pack(fill=tk.X, expand=True, pady=5)
+        self.path_frame = ttk.LabelFrame(main_frame, text="3. 配置路径", padding="5")
+        self.path_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
 
         self.paths = {}
         self.path_widgets = {}  # 存储所有路径相关的控件
@@ -159,11 +157,11 @@ class DirectoryGeneratorGUI(tk.Tk):
 
         # 定义所有可能的路径配置
         self.all_path_specs = {
-            "jn_catalog_path": "卷内目录文件:",
-            "aj_catalog_path": "案卷目录文件:",
-            "jh_catalog_path": "简化目录文件:",
-            "template_path": "模板文件:",
-            "output_folder": "输出文件夹:",
+            "jn_catalog_path": "卷内目录:",
+            "aj_catalog_path": "案卷目录:",
+            "jh_catalog_path": "简化目录:",
+            "template_path": "模板:",
+            "output_folder": "输出:",
         }
 
         # 定义每种目录类型需要的路径
@@ -179,11 +177,11 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 添加配置管理按钮
         config_buttons_frame = ttk.Frame(self.path_frame)
-        config_buttons_frame.pack(fill=tk.X, pady=(5, 0))
+        config_buttons_frame.pack(fill=tk.X, pady=(3, 0))
         
         ttk.Button(
             config_buttons_frame,
-            text="清空当前路径",
+            text="清空路径",
             command=self.clear_current_paths
         ).pack(side=tk.LEFT, padx=(0, 5))
         
@@ -194,87 +192,103 @@ class DirectoryGeneratorGUI(tk.Tk):
         ).pack(side=tk.LEFT)
 
         # --- 可选参数 ---
-        optional_frame = ttk.LabelFrame(main_frame, text="4. 可选参数", padding="10")
-        optional_frame.pack(fill=tk.X, expand=True, pady=5)
+        optional_frame = ttk.LabelFrame(main_frame, text="4. 可选参数", padding="5")
+        optional_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
 
         self.options = {}
         opt_grid = ttk.Frame(optional_frame)
         opt_grid.pack(fill=tk.X, expand=True)
 
-        ttk.Label(opt_grid, text="起始档号/案卷号:").grid(
+        ttk.Label(opt_grid, text="起始档号:").grid(
             row=0, column=0, sticky=tk.W, padx=5, pady=2
         )
-        self.options["start_file"] = ttk.Entry(opt_grid, width=30)
-        self.options["start_file"].grid(row=0, column=1, padx=5, pady=2)
+        self.options["start_file"] = ttk.Entry(opt_grid, width=20)
+        self.options["start_file"].grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
         self.options["start_file"].bind('<FocusOut>', lambda e: self.on_option_changed("start_file", e.widget.get()))
 
-        ttk.Label(opt_grid, text="结束档号/案卷号:").grid(
-            row=0, column=2, sticky=tk.W, padx=5, pady=2
+        ttk.Label(opt_grid, text="结束档号:").grid(
+            row=0, column=2, sticky=tk.W, padx=(15, 5), pady=2
         )
-        self.options["end_file"] = ttk.Entry(opt_grid, width=30)
-        self.options["end_file"].grid(row=0, column=3, padx=5, pady=2)
+        self.options["end_file"] = ttk.Entry(opt_grid, width=20)
+        self.options["end_file"].grid(row=0, column=3, sticky=tk.W, padx=5, pady=2)
         self.options["end_file"].bind('<FocusOut>', lambda e: self.on_option_changed("end_file", e.widget.get()))
 
-        # --- 控制与日志 ---
-        control_frame = ttk.Frame(main_frame, padding="10")
-        control_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        # --- 控制与日志区域 ---
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
 
+        # 左侧：打印设置和控制按钮
+        left_control = ttk.Frame(control_frame)
+        left_control.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
         # 打印设置区域
-        print_frame = ttk.LabelFrame(control_frame, text="打印设置", padding="5")
-        print_frame.pack(fill=tk.X, pady=(0, 10))
+        print_frame = ttk.LabelFrame(left_control, text="打印设置", padding="3")
+        print_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
         
         # 打印模式选择
         mode_frame = ttk.Frame(print_frame)
-        mode_frame.pack(fill=tk.X, pady=2)
+        mode_frame.pack(fill=tk.X, pady=1)
         
-        ttk.Label(mode_frame, text="打印模式:").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(mode_frame, text="模式:").pack(side=tk.LEFT, padx=(0, 5))
         
         self.print_mode_var = tk.StringVar(value="none")
         self.print_mode_var.trace('w', self.on_print_mode_changed)
-        ttk.Radiobutton(mode_frame, text="不打印", variable=self.print_mode_var, value="none").pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(mode_frame, text="边转换边打印", variable=self.print_mode_var, value="direct").pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(mode_frame, text="批量打印", variable=self.print_mode_var, value="batch").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="不打印", variable=self.print_mode_var, value="none").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(mode_frame, text="直接打印", variable=self.print_mode_var, value="direct").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(mode_frame, text="批量打印", variable=self.print_mode_var, value="batch").pack(side=tk.LEFT, padx=2)
         
         # 打印机选择
         printer_frame = ttk.Frame(print_frame)
-        printer_frame.pack(fill=tk.X, pady=2)
+        printer_frame.pack(fill=tk.X, pady=1)
         
-        ttk.Label(printer_frame, text="打印机:").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(printer_frame, text="打印机:").pack(side=tk.LEFT, padx=(0, 5))
         
         self.printer_var = tk.StringVar()
-        self.printer_combo = ttk.Combobox(printer_frame, textvariable=self.printer_var, width=40, state="readonly")
-        self.printer_combo.pack(side=tk.LEFT, padx=5)
+        self.printer_combo = ttk.Combobox(printer_frame, textvariable=self.printer_var, width=25, state="readonly")
+        self.printer_combo.pack(side=tk.LEFT, padx=2)
         
         # 刷新打印机按钮
-        self.refresh_printer_btn = ttk.Button(printer_frame, text="刷新", command=self.refresh_printers)
-        self.refresh_printer_btn.pack(side=tk.LEFT, padx=5)
+        self.refresh_printer_btn = ttk.Button(printer_frame, text="刷新", command=self.refresh_printers, width=8)
+        self.refresh_printer_btn.pack(side=tk.LEFT, padx=2)
         
         # 打印份数
         copies_frame = ttk.Frame(print_frame)
-        copies_frame.pack(fill=tk.X, pady=2)
+        copies_frame.pack(fill=tk.X, pady=1)
         
-        ttk.Label(copies_frame, text="打印份数:").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(copies_frame, text="份数:").pack(side=tk.LEFT, padx=(0, 5))
         
         self.print_copies_var = tk.StringVar(value="1")
         copies_spinbox = ttk.Spinbox(copies_frame, from_=1, to=10, width=5, textvariable=self.print_copies_var)
-        copies_spinbox.pack(side=tk.LEFT, padx=5)
+        copies_spinbox.pack(side=tk.LEFT, padx=2)
         
-        # 打印间隔控制
-        interval_frame = ttk.LabelFrame(print_frame, text="打印间隔控制", padding="3")
-        interval_frame.pack(fill=tk.X, pady=5)
+        # 批量打印按钮
+        self.batch_print_btn = ttk.Button(print_frame, text="批量打印", command=self.batch_print_files, state="disabled")
+        self.batch_print_btn.pack(pady=2)
+        
+        # 打印状态显示
+        status_frame = ttk.Frame(print_frame)
+        status_frame.pack(fill=tk.X, pady=1)
+        
+        self.print_status_var = tk.StringVar(value="队列: 0 | 完成: 0 | 失败: 0")
+        self.print_status_label = ttk.Label(status_frame, textvariable=self.print_status_var, font=("Arial", 8))
+        self.print_status_label.pack(side=tk.LEFT)
+        
+        # 打印间隔控制（折叠式）
+        interval_frame = ttk.LabelFrame(print_frame, text="间隔控制", padding="3")
+        interval_frame.pack(fill=tk.X, pady=2)
         
         # 第一行：启用开关和任务数设置
         interval_top_frame = ttk.Frame(interval_frame)
-        interval_top_frame.pack(fill=tk.X, pady=2)
+        interval_top_frame.pack(fill=tk.X, pady=1)
         
         self.interval_enabled_var = tk.BooleanVar(value=True)
         interval_checkbox = ttk.Checkbutton(
             interval_top_frame, 
-            text="启用间隔控制", 
+            text="启用", 
             variable=self.interval_enabled_var,
             command=self.on_interval_settings_changed
         )
-        interval_checkbox.pack(side=tk.LEFT, padx=(0, 15))
+        interval_checkbox.pack(side=tk.LEFT, padx=(0, 8))
         
         ttk.Label(interval_top_frame, text="每").pack(side=tk.LEFT)
         
@@ -287,65 +301,50 @@ class DirectoryGeneratorGUI(tk.Tk):
             textvariable=self.interval_task_count_var,
             command=self.on_interval_settings_changed
         )
-        task_count_spinbox.pack(side=tk.LEFT, padx=(2, 2))
+        task_count_spinbox.pack(side=tk.LEFT, padx=(1, 1))
         task_count_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
         
-        ttk.Label(interval_top_frame, text="个任务后休息").pack(side=tk.LEFT)
-        
-        # 第二行：间隔时间设置
-        interval_bottom_frame = ttk.Frame(interval_frame)
-        interval_bottom_frame.pack(fill=tk.X, pady=2)
-        
-        ttk.Label(interval_bottom_frame, text="休息时间:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(interval_top_frame, text="个任务休息").pack(side=tk.LEFT)
         
         self.interval_seconds_var = tk.StringVar(value="50")
         seconds_spinbox = ttk.Spinbox(
-            interval_bottom_frame, 
+            interval_top_frame, 
             from_=10, 
             to=300, 
-            width=4, 
+            width=3, 
             textvariable=self.interval_seconds_var,
             command=self.on_interval_settings_changed
         )
-        seconds_spinbox.pack(side=tk.LEFT, padx=2)
+        seconds_spinbox.pack(side=tk.LEFT, padx=(1, 1))
         seconds_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
         
-        ttk.Label(interval_bottom_frame, text="秒").pack(side=tk.LEFT)
+        ttk.Label(interval_top_frame, text="秒").pack(side=tk.LEFT)
         
-        # 跳过休息按钮（初始时隐藏）
+        # 跳过休息按钮
         self.skip_rest_btn = ttk.Button(
-            interval_bottom_frame, 
+            interval_top_frame, 
             text="跳过休息", 
             command=self.skip_printer_rest,
-            state="disabled"
+            state="disabled",
+            width=8
         )
-        self.skip_rest_btn.pack(side=tk.RIGHT, padx=5)
+        self.skip_rest_btn.pack(side=tk.RIGHT, padx=2)
         
-        # 批量打印文件选择按钮
-        self.batch_print_btn = ttk.Button(print_frame, text="选择文件批量打印", command=self.batch_print_files, state="disabled")
-        self.batch_print_btn.pack(pady=5)
-        
-        # 打印状态显示
-        status_frame = ttk.Frame(print_frame)
-        status_frame.pack(fill=tk.X, pady=2)
-        
-        self.print_status_var = tk.StringVar(value="打印队列: 0 | 已完成: 0 | 失败: 0")
-        self.print_status_label = ttk.Label(status_frame, textvariable=self.print_status_var, font=("Arial", 8))
-        self.print_status_label.pack(side=tk.LEFT)
-        
-        # 间隔状态显示（单独一行）
+        # 间隔状态显示
         self.interval_status_var = tk.StringVar() 
         self.interval_status_label = ttk.Label(print_frame, textvariable=self.interval_status_var, font=("Arial", 8), foreground="blue")
-        self.interval_status_label.pack(fill=tk.X, pady=2)
+        self.interval_status_label.pack(fill=tk.X, pady=1)
 
+        # 开始按钮
         self.start_button = ttk.Button(
-            control_frame, text="开始生成", command=self.run_generation_thread
+            left_control, text="开始生成", command=self.run_generation_thread
         )
         self.start_button.pack(pady=5)
 
-        log_frame = ttk.LabelFrame(control_frame, text="日志输出", padding="5")
-        log_frame.pack(fill=tk.BOTH, expand=True)
-        self.log_text = ScrolledText(log_frame, state="disabled", height=15)
+        # 右侧：日志输出
+        log_frame = ttk.LabelFrame(control_frame, text="日志", padding="3")
+        log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        self.log_text = ScrolledText(log_frame, state="disabled", height=10, width=50, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def show_initial_method_info(self):
@@ -419,7 +418,7 @@ class DirectoryGeneratorGUI(tk.Tk):
             label = ttk.Label(self.path_grid, text=text)
             
             # 创建输入框
-            entry = ttk.Entry(self.path_grid, width=70)
+            entry = ttk.Entry(self.path_grid, width=50)
             entry.bind('<FocusOut>', lambda e, k=key: self.on_path_changed(k, e.widget.get()))
             
             # 创建浏览按钮
@@ -674,7 +673,9 @@ class DirectoryGeneratorGUI(tk.Tk):
                     self.skip_rest_btn.config(state="disabled")
                     
         except Exception as e:
-            pass
+            logging.error(f"监控打印状态时发生异常: {e}")
+            self.interval_status_var.set("状态监控异常")
+            self.skip_rest_btn.config(state="disabled")
         
         # 每2秒更新一次状态
         self.after(2000, self.monitor_print_status)

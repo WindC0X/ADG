@@ -354,8 +354,7 @@ class PrintService:
             if time.time() - start_time >= interval_seconds:
                 # 休息时间到，重置状态
                 self.printer_rest_states[printer_name] = False
-                self.printer_task_counters[printer_name] = 0
-                self.logger.info(f"打印机 {printer_name} 休息结束，重置任务计数器")
+                self.logger.info(f"打印机 {printer_name} 休息结束")
                 return False
         
         return True
@@ -370,10 +369,13 @@ class PrintService:
         self.printer_rest_states[printer_name] = True
         self.printer_rest_start_times[printer_name] = time.time()
         
+        # 立即重置任务计数器
+        self.printer_task_counters[printer_name] = 0
+        
         with self._config_lock:
             interval_seconds = self.interval_config.get('interval_seconds', 50) if self.interval_config else 50
         
-        self.logger.info(f"打印机 {printer_name} 开始休息 {interval_seconds} 秒")
+        self.logger.info(f"打印机 {printer_name} 开始休息 {interval_seconds} 秒，任务计数器已重置")
     
     def skip_printer_rest(self, printer_name: str) -> bool:
         """
@@ -634,12 +636,12 @@ if __name__ == "__main__":
     # 测试代码
     logging.basicConfig(level=logging.INFO)
     
-    print("=== 打印服务测试 ===")
+    logging.info("=== 打印服务测试 ===")
     service = PrintService()
     
-    print(f"发现打印机: {service.available_printers}")
-    print(f"默认打印机: {service.get_default_printer()}")
+    logging.info(f"发现打印机: {service.available_printers}")
+    logging.info(f"默认打印机: {service.get_default_printer()}")
     
     if service.available_printers:
         test_printer = service.available_printers[0]
-        print(f"测试打印机状态: {test_printer} -> {service.check_printer_status(test_printer)}")
+        logging.info(f"测试打印机状态: {test_printer} -> {service.check_printer_status(test_printer)}")

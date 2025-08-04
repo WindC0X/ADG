@@ -4,6 +4,7 @@
 """
 
 import json
+import logging
 import os
 from typing import Dict, Any, Optional
 
@@ -32,11 +33,11 @@ class ConfigManager:
                 if self._validate_config_structure(config_data):
                     return config_data
                 else:
-                    print(f"配置文件结构无效，使用默认配置: {self.config_file}")
+                    logging.warning(f"配置文件结构无效，使用默认配置: {self.config_file}")
                     return self._get_default_config()
                     
             except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
-                print(f"加载配置文件失败: {e}")
+                logging.error(f"加载配置文件失败: {e}")
         
         # 返回默认配置
         return self._get_default_config()
@@ -67,11 +68,11 @@ class ConfigManager:
         # 检查必需字段
         for key, expected_type in required_schema.items():
             if key not in config:
-                print(f"缺少必需的配置字段: {key}")
+                logging.error(f"缺少必需的配置字段: {key}")
                 return False
             
             if not isinstance(config[key], expected_type):
-                print(f"配置字段类型错误: {key}, 期望 {expected_type.__name__}, 实际 {type(config[key]).__name__}")
+                logging.error(f"配置字段类型错误: {key}, 期望 {expected_type.__name__}, 实际 {type(config[key]).__name__}")
                 return False
         
         # 验证路径配置
@@ -81,13 +82,13 @@ class ConfigManager:
         # 验证recipe值
         valid_recipes = ["卷内目录", "案卷目录", "全引目录", "简化目录"]
         if config["last_recipe"] not in valid_recipes:
-            print(f"无效的last_recipe值: {config['last_recipe']}")
+            logging.warning(f"无效的last_recipe值: {config['last_recipe']}")
             return False
         
         # 验证行高方案
         valid_methods = ["xlwings", "gdi", "pillow"]
         if config["last_height_method"] not in valid_methods:
-            print(f"无效的last_height_method值: {config['last_height_method']}")
+            logging.warning(f"无效的last_height_method值: {config['last_height_method']}")
             return False
         
         # 验证窗口几何字符串格式
@@ -113,17 +114,17 @@ class ConfigManager:
         # 检查是否包含预期的路径键
         for key in expected_path_keys:
             if key not in paths:
-                print(f"缺少路径配置: {key}")
+                logging.warning(f"缺少路径配置: {key}")
                 return False
             
             path_value = paths[key]
             if not isinstance(path_value, str):
-                print(f"路径值类型错误: {key}")
+                logging.error(f"路径值类型错误: {key}")
                 return False
             
             # 如果路径不为空，验证其安全性
             if path_value and not self._is_safe_path(path_value):
-                print(f"不安全的路径配置: {key} = {path_value}")
+                logging.error(f"不安全的路径配置: {key} = {path_value}")
                 return False
         
         return True
@@ -166,7 +167,7 @@ class ConfigManager:
     def _validate_print_interval_config(self, interval_config: Dict[str, Any]) -> bool:
         """验证打印间隔配置"""
         if not isinstance(interval_config, dict):
-            print("打印间隔配置必须是字典类型")
+            logging.error("打印间隔配置必须是字典类型")
             return False
         
         # 验证必需字段
@@ -178,20 +179,20 @@ class ConfigManager:
         
         for field, expected_type in required_fields.items():
             if field not in interval_config:
-                print(f"缺少打印间隔配置字段: {field}")
+                logging.error(f"缺少打印间隔配置字段: {field}")
                 return False
             
             if not isinstance(interval_config[field], expected_type):
-                print(f"打印间隔配置字段类型错误: {field}, 期望 {expected_type.__name__}")
+                logging.error(f"打印间隔配置字段类型错误: {field}, 期望 {expected_type.__name__}")
                 return False
         
         # 验证数值范围
         if interval_config["task_count"] <= 0 or interval_config["task_count"] > 100:
-            print(f"任务数量无效: {interval_config['task_count']}, 必须在1-100之间")
+            logging.error(f"任务数量无效: {interval_config['task_count']}, 必须在1-100之间")
             return False
         
         if interval_config["interval_seconds"] <= 0 or interval_config["interval_seconds"] > 3600:
-            print(f"间隔时间无效: {interval_config['interval_seconds']}, 必须在1-3600秒之间")
+            logging.error(f"间隔时间无效: {interval_config['interval_seconds']}, 必须在1-3600秒之间")
             return False
         
         return True
@@ -230,7 +231,7 @@ class ConfigManager:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
             return True
         except OSError as e:
-            print(f"保存配置文件失败: {e}")
+            logging.error(f"保存配置文件失败: {e}")
             return False
     
     def get(self, key: str, default: Any = None) -> Any:
