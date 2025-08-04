@@ -1,16 +1,21 @@
 {
   "paths": {
-    "jn_catalog_path": "F:/CODE/归档/Excel_Printing_Height_Solution_Kit_v1/data/test_data/卷内测试数据.xlsx",
+    "jn_catalog_path": "F:/CODE/data/录入/转换/张高宇第1、2、4、5、6箱-整理-卷内.xlsx",
     "aj_catalog_path": "F:/CODE/归档/Excel_Printing_Height_Solution_Kit_v1/data/test_data/卷内测试数据.xlsx",
-    "jh_catalog_path": "F:/CODE/data/录入/转换/张高宇第1、2、4、5、6箱-整理-卷内.xlsx",
-    "template_path": "F:/CODE/归档/Excel_Printing_Height_Solution_Kit_v1/卷内目录模板.xlsx",
+    "jh_catalog_path": "F:/CODE/归档/Excel_Printing_Height_Solution_Kit_v1/data/test_data/卷内测试数据.xlsx",
+    "template_path": "F:/CODE/data/录入/转换/卷内目录模板.xlsx",
     "output_folder": "F:/CODE/data/录入/转换/测试"
   },
-  "last_recipe": "简化目录",
-  "last_height_method": "gdi",
-  "window_geometry": "1386x929+312+312",
+  "last_recipe": "卷内目录",
+  "last_height_method": "pillow",
+  "window_geometry": "1386x1112+295+104",
   "options": {
     "start_file": "",
     "end_file": ""
+  },
+  "print_interval": {
+    "enabled": true,
+    "task_count": 3,
+    "interval_seconds": 10
   }
 }

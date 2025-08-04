@@ -26,6 +26,9 @@ def create_qy_full_index(
     output_folder,
     start_file="",
     end_file="",
+    direct_print=False,
+    printer_name=None,
+    print_copies=1,
 ):
     """
     配方：生成传统文书全引目录。
@@ -104,6 +107,9 @@ def create_qy_full_index(
                 autofit_columns=autofit_columns,
                 static_cells=static_cells,
                 title_row_num=3,  # "全引目录"的标题有3行
+                direct_print=direct_print,
+                printer_name=printer_name,
+                print_copies=print_copies,
             )
 
     logging.info(f"--- 生成结束 ---")
@@ -112,7 +118,8 @@ def create_qy_full_index(
 
 
 def create_aj_index(
-    catalog_path, template_path, output_folder, start_file="", end_file=""
+    catalog_path, template_path, output_folder, start_file="", end_file="",
+    direct_print=False, printer_name=None, print_copies=1
 ):
     """配方：生成案卷目录。"""
     logging.info("--- 开始生成案卷目录 ---")
@@ -169,6 +176,9 @@ def create_aj_index(
             autofit_columns=autofit_columns,
             static_cells=static_cells,
             title_row_num=4,
+            direct_print=direct_print,
+            printer_name=printer_name,
+            print_copies=print_copies,
         )
 
     logging.info(f"--- 生成结束 ---")
@@ -185,6 +195,9 @@ def create_jn_or_jh_index(
     recipe_name,
     start_file="",
     end_file="",
+    direct_print=False,
+    printer_name=None,
+    print_copies=1,
 ):
     """配方：生成卷内目录 或 简化目录。"""
     logging.info(f"--- 开始生成 {recipe_name} ---")
@@ -243,6 +256,9 @@ def create_jn_or_jh_index(
                 column_mapping=column_mapping,
                 autofit_columns=autofit_columns,
                 title_row_num=4,
+                direct_print=direct_print,
+                printer_name=printer_name,
+                print_copies=print_copies,
             )
 
     logging.info(f"--- 生成结束 ---")

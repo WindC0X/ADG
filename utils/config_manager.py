@@ -60,7 +60,8 @@ class ConfigManager:
             "last_recipe": str,
             "last_height_method": str,
             "window_geometry": str,
-            "options": dict
+            "options": dict,
+            "print_interval": dict
         }
         
         # 检查必需字段
@@ -91,6 +92,10 @@ class ConfigManager:
         
         # 验证窗口几何字符串格式
         if not self._validate_geometry_string(config["window_geometry"]):
+            return False
+        
+        # 验证打印间隔配置
+        if not self._validate_print_interval_config(config["print_interval"]):
             return False
         
         return True
@@ -158,6 +163,39 @@ class ConfigManager:
         pattern = r'^\d+x\d+(\+\d+\+\d+)?$'
         return bool(re.match(pattern, geometry))
     
+    def _validate_print_interval_config(self, interval_config: Dict[str, Any]) -> bool:
+        """验证打印间隔配置"""
+        if not isinstance(interval_config, dict):
+            print("打印间隔配置必须是字典类型")
+            return False
+        
+        # 验证必需字段
+        required_fields = {
+            "enabled": bool,
+            "task_count": int,
+            "interval_seconds": int
+        }
+        
+        for field, expected_type in required_fields.items():
+            if field not in interval_config:
+                print(f"缺少打印间隔配置字段: {field}")
+                return False
+            
+            if not isinstance(interval_config[field], expected_type):
+                print(f"打印间隔配置字段类型错误: {field}, 期望 {expected_type.__name__}")
+                return False
+        
+        # 验证数值范围
+        if interval_config["task_count"] <= 0 or interval_config["task_count"] > 100:
+            print(f"任务数量无效: {interval_config['task_count']}, 必须在1-100之间")
+            return False
+        
+        if interval_config["interval_seconds"] <= 0 or interval_config["interval_seconds"] > 3600:
+            print(f"间隔时间无效: {interval_config['interval_seconds']}, 必须在1-3600秒之间")
+            return False
+        
+        return True
+    
     def _get_default_config(self) -> Dict[str, Any]:
         """获取默认配置"""
         return {
@@ -174,6 +212,11 @@ class ConfigManager:
             "options": {
                 "start_file": "",
                 "end_file": ""
+            },
+            "print_interval": {
+                "enabled": True,
+                "task_count": 3,
+                "interval_seconds": 50
             }
         }
     
@@ -255,6 +298,42 @@ class ConfigManager:
     def set_option(self, option_key: str, option_value: str) -> None:
         """设置可选参数"""
         self.set(f"options.{option_key}", option_value)
+    
+    def get_print_interval_config(self) -> Dict[str, Any]:
+        """获取打印间隔配置"""
+        return self.get("print_interval", {
+            "enabled": True,
+            "task_count": 3,
+            "interval_seconds": 50
+        })
+    
+    def set_print_interval_config(self, config: Dict[str, Any]) -> None:
+        """设置打印间隔配置"""
+        self.set("print_interval", config)
+    
+    def get_print_interval_enabled(self) -> bool:
+        """获取打印间隔是否启用"""
+        return self.get("print_interval.enabled", True)
+    
+    def set_print_interval_enabled(self, enabled: bool) -> None:
+        """设置打印间隔启用状态"""
+        self.set("print_interval.enabled", enabled)
+    
+    def get_print_interval_task_count(self) -> int:
+        """获取打印间隔任务数量"""
+        return self.get("print_interval.task_count", 3)
+    
+    def set_print_interval_task_count(self, count: int) -> None:
+        """设置打印间隔任务数量"""
+        self.set("print_interval.task_count", count)
+    
+    def get_print_interval_seconds(self) -> int:
+        """获取打印间隔时间（秒）"""
+        return self.get("print_interval.interval_seconds", 50)
+    
+    def set_print_interval_seconds(self, seconds: int) -> None:
+        """设置打印间隔时间（秒）"""
+        self.set("print_interval.interval_seconds", seconds)
 
 
 # 全局配置管理器实例

@@ -273,6 +273,9 @@ def generate_one_archive_directory(
     static_cells={},
     title_row_num=4,
     page_height_mm=296,
+    direct_print=False,
+    printer_name=None,
+    print_copies=1,
 ):
     """
     为单个案卷生成目录，处理分页和内容自适应。
@@ -512,6 +515,28 @@ def generate_one_archive_directory(
         logging.info(
             f"[{index:04d}] 目录已保存: {safe_archive_id}.xlsx, 共计 {len(pages)} 页"
         )
+        
+        # 边转换边打印模式
+        if direct_print and printer_name:
+            try:
+                # 导入打印服务（避免循环导入）
+                import sys
+                import os as os_module
+                # 添加项目根路径到sys.path
+                current_dir = os_module.path.dirname(os_module.path.dirname(os_module.path.abspath(__file__)))
+                if current_dir not in sys.path:
+                    sys.path.insert(0, current_dir)
+                
+                from utils.print_service import get_print_service
+                print_service = get_print_service()
+                
+                # 使用异步打印，不阻塞文件生成
+                future = print_service.async_print(save_path, printer_name, print_copies)
+                logging.info(f"[{index:04d}] 已提交异步打印任务: {safe_archive_id}.xlsx -> {printer_name}")
+                
+            except Exception as print_err:
+                logging.error(f"[{index:04d}] 提交异步打印任务异常: {print_err}")
+        
         return len(pages)
     except PermissionError:
         logging.warning(

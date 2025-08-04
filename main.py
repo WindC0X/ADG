@@ -54,6 +54,10 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.current_task_thread = None
         self.shutdown_flag = threading.Event()
         
+        # 初始化打印服务
+        from utils.print_service import get_print_service
+        self.print_service = get_print_service()
+        
         self.title("统一目录生成器 v4.0 (Tkinter版)")
         
         # 从配置加载窗口几何
@@ -70,10 +74,14 @@ class DirectoryGeneratorGUI(tk.Tk):
 
         self.create_widgets()
         self.load_config()  # 加载配置
+        self.refresh_printers()  # 初始化打印机列表
         self.after(100, self.process_log_queue)
         
         # 初始化完成后显示当前方案信息
         self.after(200, self.show_initial_method_info)
+        
+        # 启动打印状态监控
+        self.after(1000, self.monitor_print_status)
         
         # 绑定窗口关闭事件
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -210,6 +218,125 @@ class DirectoryGeneratorGUI(tk.Tk):
         # --- 控制与日志 ---
         control_frame = ttk.Frame(main_frame, padding="10")
         control_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        # 打印设置区域
+        print_frame = ttk.LabelFrame(control_frame, text="打印设置", padding="5")
+        print_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 打印模式选择
+        mode_frame = ttk.Frame(print_frame)
+        mode_frame.pack(fill=tk.X, pady=2)
+        
+        ttk.Label(mode_frame, text="打印模式:").pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.print_mode_var = tk.StringVar(value="none")
+        self.print_mode_var.trace('w', self.on_print_mode_changed)
+        ttk.Radiobutton(mode_frame, text="不打印", variable=self.print_mode_var, value="none").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="边转换边打印", variable=self.print_mode_var, value="direct").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="批量打印", variable=self.print_mode_var, value="batch").pack(side=tk.LEFT, padx=5)
+        
+        # 打印机选择
+        printer_frame = ttk.Frame(print_frame)
+        printer_frame.pack(fill=tk.X, pady=2)
+        
+        ttk.Label(printer_frame, text="打印机:").pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.printer_var = tk.StringVar()
+        self.printer_combo = ttk.Combobox(printer_frame, textvariable=self.printer_var, width=40, state="readonly")
+        self.printer_combo.pack(side=tk.LEFT, padx=5)
+        
+        # 刷新打印机按钮
+        self.refresh_printer_btn = ttk.Button(printer_frame, text="刷新", command=self.refresh_printers)
+        self.refresh_printer_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 打印份数
+        copies_frame = ttk.Frame(print_frame)
+        copies_frame.pack(fill=tk.X, pady=2)
+        
+        ttk.Label(copies_frame, text="打印份数:").pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.print_copies_var = tk.StringVar(value="1")
+        copies_spinbox = ttk.Spinbox(copies_frame, from_=1, to=10, width=5, textvariable=self.print_copies_var)
+        copies_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # 打印间隔控制
+        interval_frame = ttk.LabelFrame(print_frame, text="打印间隔控制", padding="3")
+        interval_frame.pack(fill=tk.X, pady=5)
+        
+        # 第一行：启用开关和任务数设置
+        interval_top_frame = ttk.Frame(interval_frame)
+        interval_top_frame.pack(fill=tk.X, pady=2)
+        
+        self.interval_enabled_var = tk.BooleanVar(value=True)
+        interval_checkbox = ttk.Checkbutton(
+            interval_top_frame, 
+            text="启用间隔控制", 
+            variable=self.interval_enabled_var,
+            command=self.on_interval_settings_changed
+        )
+        interval_checkbox.pack(side=tk.LEFT, padx=(0, 15))
+        
+        ttk.Label(interval_top_frame, text="每").pack(side=tk.LEFT)
+        
+        self.interval_task_count_var = tk.StringVar(value="3")
+        task_count_spinbox = ttk.Spinbox(
+            interval_top_frame, 
+            from_=1, 
+            to=20, 
+            width=3, 
+            textvariable=self.interval_task_count_var,
+            command=self.on_interval_settings_changed
+        )
+        task_count_spinbox.pack(side=tk.LEFT, padx=(2, 2))
+        task_count_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
+        
+        ttk.Label(interval_top_frame, text="个任务后休息").pack(side=tk.LEFT)
+        
+        # 第二行：间隔时间设置
+        interval_bottom_frame = ttk.Frame(interval_frame)
+        interval_bottom_frame.pack(fill=tk.X, pady=2)
+        
+        ttk.Label(interval_bottom_frame, text="休息时间:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.interval_seconds_var = tk.StringVar(value="50")
+        seconds_spinbox = ttk.Spinbox(
+            interval_bottom_frame, 
+            from_=10, 
+            to=300, 
+            width=4, 
+            textvariable=self.interval_seconds_var,
+            command=self.on_interval_settings_changed
+        )
+        seconds_spinbox.pack(side=tk.LEFT, padx=2)
+        seconds_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
+        
+        ttk.Label(interval_bottom_frame, text="秒").pack(side=tk.LEFT)
+        
+        # 跳过休息按钮（初始时隐藏）
+        self.skip_rest_btn = ttk.Button(
+            interval_bottom_frame, 
+            text="跳过休息", 
+            command=self.skip_printer_rest,
+            state="disabled"
+        )
+        self.skip_rest_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # 批量打印文件选择按钮
+        self.batch_print_btn = ttk.Button(print_frame, text="选择文件批量打印", command=self.batch_print_files, state="disabled")
+        self.batch_print_btn.pack(pady=5)
+        
+        # 打印状态显示
+        status_frame = ttk.Frame(print_frame)
+        status_frame.pack(fill=tk.X, pady=2)
+        
+        self.print_status_var = tk.StringVar(value="打印队列: 0 | 已完成: 0 | 失败: 0")
+        self.print_status_label = ttk.Label(status_frame, textvariable=self.print_status_var, font=("Arial", 8))
+        self.print_status_label.pack(side=tk.LEFT)
+        
+        # 间隔状态显示（单独一行）
+        self.interval_status_var = tk.StringVar() 
+        self.interval_status_label = ttk.Label(print_frame, textvariable=self.interval_status_var, font=("Arial", 8), foreground="blue")
+        self.interval_status_label.pack(fill=tk.X, pady=2)
 
         self.start_button = ttk.Button(
             control_frame, text="开始生成", command=self.run_generation_thread
@@ -395,6 +522,15 @@ class DirectoryGeneratorGUI(tk.Tk):
                 if option_value:
                     entry_widget.delete(0, tk.END)
                     entry_widget.insert(0, option_value)
+            
+            # 加载打印间隔控制配置
+            interval_config = self.config_manager.get_print_interval_config()
+            self.interval_enabled_var.set(interval_config.get('enabled', True))
+            self.interval_task_count_var.set(str(interval_config.get('task_count', 3)))
+            self.interval_seconds_var.set(str(interval_config.get('interval_seconds', 50)))
+            
+            # 更新打印服务的间隔配置
+            self.print_service.set_interval_config(interval_config)
 
             # 更新路径显示（重要：在加载配置后更新）
             self.update_path_visibility()
@@ -422,13 +558,24 @@ class DirectoryGeneratorGUI(tk.Tk):
                     if self.current_task_thread.is_alive():
                         messagebox.showwarning("警告", "任务仍在运行，强制关闭程序")
             
+            # 关闭打印服务和所有相关线程
+            if hasattr(self, 'print_service'):
+                logging.info("正在关闭打印服务...")
+                self.print_service.shutdown(timeout=3.0)  # 3秒超时
+                
+                # 清理单例实例
+                from utils.print_service import cleanup_print_service
+                cleanup_print_service()
+            
             # 保存窗口几何信息
             geometry = self.geometry()
             self.config_manager.set_window_geometry(geometry)
             self.config_manager.save_config()
             
+            logging.info("程序正在安全关闭...")
+            
         except Exception as e:
-            logging.warning(f"保存配置失败: {e}")
+            logging.warning(f"关闭程序时发生异常: {e}")
         finally:
             self.destroy()
 
@@ -492,6 +639,165 @@ class DirectoryGeneratorGUI(tk.Tk):
             pass
         self.after(100, self.process_log_queue)
 
+    def monitor_print_status(self):
+        """监控打印状态"""
+        try:
+            if hasattr(self, 'print_service'):
+                stats = self.print_service.get_print_stats()
+                pending_count = self.print_service.get_pending_print_count()
+                
+                status_text = f"打印队列: {pending_count} | 已完成: {stats['total_completed']} | 失败: {stats['total_failed']}"
+                self.print_status_var.set(status_text)
+                
+                # 监控当前选择的打印机的间隔状态
+                current_printer = self.printer_var.get()
+                if current_printer:
+                    rest_info = self.print_service.get_printer_rest_info(current_printer)
+                    
+                    if rest_info['is_resting']:
+                        # 显示休息状态和倒计时
+                        remaining = rest_info['remaining_seconds']
+                        interval_text = f"打印暂时停止，剩余 {remaining} 秒"
+                        self.interval_status_var.set(interval_text)
+                        self.skip_rest_btn.config(state="normal")
+                    else:
+                        # 显示当前任务计数
+                        task_count = rest_info['task_count']
+                        if task_count > 0:
+                            interval_text = f"当前打印机已完成 {task_count} 个任务"
+                            self.interval_status_var.set(interval_text)
+                        else:
+                            self.interval_status_var.set("")
+                        self.skip_rest_btn.config(state="disabled")
+                else:
+                    self.interval_status_var.set("")
+                    self.skip_rest_btn.config(state="disabled")
+                    
+        except Exception as e:
+            pass
+        
+        # 每2秒更新一次状态
+        self.after(2000, self.monitor_print_status)
+    
+    def on_print_mode_changed(self, *args):
+        """当打印模式改变时的回调"""
+        mode = self.print_mode_var.get()
+        if mode == "batch":
+            self.batch_print_btn.config(state="normal")
+        else:
+            self.batch_print_btn.config(state="disabled")
+    
+    def on_interval_settings_changed(self):
+        """当间隔控制设置改变时的回调"""
+        try:
+            enabled = self.interval_enabled_var.get()
+            task_count = int(self.interval_task_count_var.get())
+            interval_seconds = int(self.interval_seconds_var.get())
+            
+            # 验证数值范围
+            if task_count < 1 or task_count > 20:
+                messagebox.showwarning("警告", "任务数量必须在1-20之间")
+                self.interval_task_count_var.set("3")
+                return
+            
+            if interval_seconds < 1 or interval_seconds > 300:
+                messagebox.showwarning("警告", "休息时间必须在1-300秒之间")
+                self.interval_seconds_var.set("10")  # 改为更合理的默认值
+                return
+            
+            # 保存配置
+            interval_config = {
+                'enabled': enabled,
+                'task_count': task_count,
+                'interval_seconds': interval_seconds
+            }
+            
+            self.config_manager.set_print_interval_config(interval_config)
+            self.config_manager.save_config()
+            
+            # 更新打印服务配置
+            self.print_service.set_interval_config(interval_config)
+            
+            logging.info(f"打印间隔控制配置已更新: {interval_config}")
+            
+        except ValueError:
+            messagebox.showerror("错误", "请输入有效的数字")
+        except Exception as e:
+            logging.error(f"更新间隔控制配置失败: {e}")
+    
+    def skip_printer_rest(self):
+        """跳过当前打印机的休息时间"""
+        try:
+            current_printer = self.printer_var.get()
+            if not current_printer:
+                messagebox.showwarning("警告", "请选择打印机")
+                return
+            
+            success = self.print_service.skip_printer_rest(current_printer)
+            if success:
+                messagebox.showinfo("信息", f"已跳过打印机 {current_printer} 的休息时间")
+                logging.info(f"用户手动跳过打印机 {current_printer} 的休息时间")
+            else:
+                messagebox.showinfo("信息", f"打印机 {current_printer} 当前没有在休息")
+                
+        except Exception as e:
+            logging.error(f"跳过休息时间失败: {e}")
+            messagebox.showerror("错误", f"跳过休息时间失败: {e}")
+    
+    def refresh_printers(self):
+        """刷新打印机列表"""
+        try:
+            printers = self.print_service.refresh_printers()
+            self.printer_combo['values'] = printers
+            
+            # 设置默认打印机
+            default_printer = self.print_service.get_default_printer()
+            if default_printer and default_printer in printers:
+                self.printer_var.set(default_printer)
+            elif printers:
+                self.printer_var.set(printers[0])
+            
+            logging.info(f"已刷新打印机列表，发现 {len(printers)} 台打印机")
+            
+        except Exception as e:
+            logging.error(f"刷新打印机列表失败: {e}")
+            messagebox.showerror("错误", f"刷新打印机列表失败: {e}")
+    
+    def batch_print_files(self):
+        """批量打印文件"""
+        if not self.printer_var.get():
+            messagebox.showwarning("警告", "请选择打印机")
+            return
+        
+        # 选择要打印的Excel文件
+        file_paths = filedialog.askopenfilenames(
+            title="选择要打印的Excel文件",
+            filetypes=[("Excel文件", "*.xlsx"), ("所有文件", "*.*")]
+        )
+        
+        if not file_paths:
+            return
+        
+        try:
+            copies = int(self.print_copies_var.get())
+            printer_name = self.printer_var.get()
+            
+            # 添加打印任务到队列
+            for file_path in file_paths:
+                self.print_service.add_print_job(file_path, printer_name, copies)
+            
+            # 启动批量打印
+            self.print_service.start_batch_printing()
+            
+            logging.info(f"已添加 {len(file_paths)} 个文件到打印队列")
+            messagebox.showinfo("信息", f"已添加 {len(file_paths)} 个文件到打印队列\n打印机: {printer_name}")
+            
+        except ValueError:
+            messagebox.showerror("错误", "打印份数必须是有效的数字")
+        except Exception as e:
+            logging.error(f"批量打印失败: {e}")
+            messagebox.showerror("错误", f"批量打印失败: {e}")
+
     def run_generation_thread(self):
         """在单独的线程中启动目录生成任务，以防UI冻结。"""
         # 检查是否有任务正在运行
@@ -519,7 +825,15 @@ class DirectoryGeneratorGUI(tk.Tk):
             params = {key: widget.get() for key, widget in self.paths.items()}
             params.update({key: widget.get() for key, widget in self.options.items()})
 
+            # 获取打印参数
+            print_mode = self.print_mode_var.get()
+            printer_name = self.printer_var.get() if print_mode in ["direct", "batch"] else None
+            print_copies = int(self.print_copies_var.get()) if print_mode in ["direct", "batch"] else 1
+            direct_print = print_mode == "direct"
+
             logging.info(f"任务开始: {recipe}")
+            if direct_print and printer_name:
+                logging.info(f"边转换边打印模式，打印机: {printer_name}，份数: {print_copies}")
 
             if recipe == "全引目录":
                 if not all(
@@ -541,6 +855,9 @@ class DirectoryGeneratorGUI(tk.Tk):
                     output_folder=params["output_folder"],
                     start_file=params["start_file"],
                     end_file=params["end_file"],
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
                 )
             elif recipe == "案卷目录":
                 if not all(
@@ -560,11 +877,20 @@ class DirectoryGeneratorGUI(tk.Tk):
                     output_folder=params["output_folder"],
                     start_file=params["start_file"],
                     end_file=params["end_file"],
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
                 )
             elif recipe in ["卷内目录", "简化目录"]:
+                # 根据不同的目录类型使用对应的路径
+                if recipe == "卷内目录":
+                    catalog_path_key = "jn_catalog_path"
+                else:  # 简化目录
+                    catalog_path_key = "jh_catalog_path"
+                    
                 if not all(
                     [
-                        params["jh_catalog_path"],
+                        params[catalog_path_key],
                         params["template_path"],
                         params["output_folder"],
                     ]
@@ -574,12 +900,15 @@ class DirectoryGeneratorGUI(tk.Tk):
                     )
                     return
                 create_jn_or_jh_index(
-                    catalog_path=params["jh_catalog_path"],
+                    catalog_path=params[catalog_path_key],
                     template_path=params["template_path"],
                     output_folder=params["output_folder"],
                     recipe_name=recipe,
                     start_file=params["start_file"],
                     end_file=params["end_file"],
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
                 )
 
             logging.info("任务成功完成！")
