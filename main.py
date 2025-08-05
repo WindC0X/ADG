@@ -92,48 +92,64 @@ class DirectoryGeneratorGUI(tk.Tk):
         main_frame = ttk.Frame(self, padding="5")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # --- 顶部区域：目录类型和行高计算方案 ---
+        # --- 顶部紧凑配置区域 ---
         top_frame = ttk.Frame(main_frame)
-        top_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
+        top_frame.pack(fill=tk.X, expand=False, pady=(0, 1))
         
-        # 左侧：目录类型选择
-        type_frame = ttk.LabelFrame(top_frame, text="1. 目录类型", padding="2")
-        type_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 1))
+        # 第一行：目录类型、行高方案、档号范围
+        config_row1 = ttk.Frame(top_frame)
+        config_row1.pack(fill=tk.X, pady=(0, 1))
+        
+        # 目录类型
+        ttk.Label(config_row1, text="目录类型:").pack(side=tk.LEFT)
         self.recipe_var = tk.StringVar()
         self.recipe_combo = ttk.Combobox(
-            type_frame,
+            config_row1,
             textvariable=self.recipe_var,
             values=["卷内目录", "案卷目录", "全引目录", "简化目录"],
             state="readonly",
-            height=4
+            width=8
         )
-        self.recipe_combo.pack(fill=tk.X, expand=True)
+        self.recipe_combo.pack(side=tk.LEFT, padx=(2, 8))
         self.recipe_combo.current(0)
 
-        # 右侧：行高计算方案选择
-        height_frame = ttk.LabelFrame(top_frame, text="2. 行高计算方案", padding="2")
-        height_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(1, 0))
+        # 行高方案
+        ttk.Label(config_row1, text="行高方案:").pack(side=tk.LEFT)
+        height_container = ttk.Frame(config_row1)
+        height_container.pack(side=tk.LEFT, padx=(2, 8))
         
         # 获取可用方案
         available_methods = get_available_methods()
         method_display_names = {
-            'xlwings': 'xlwings (原始AutoFit)',
-            'gdi': 'GDI (Windows精确测量)',
-            'pillow': 'Pillow (独立计算)'
+            'xlwings': 'xlwings',
+            'gdi': 'GDI',
+            'pillow': 'Pillow'
         }
         
         method_values = [method_display_names.get(method, method) for method in available_methods]
         
         self.height_method_var = tk.StringVar()
         self.height_method_combo = ttk.Combobox(
-            height_frame,
+            height_container,
             textvariable=self.height_method_var,
             values=method_values,
             state="readonly",
-            height=3
+            width=8
         )
-        self.height_method_combo.pack(fill=tk.X, expand=True)
+        self.height_method_combo.pack(side=tk.LEFT)
         self.height_method_combo.current(0)
+        
+        # 档号范围（同行）
+        ttk.Label(config_row1, text="起始档号:").pack(side=tk.LEFT)
+        self.options = {}
+        self.options["start_file"] = ttk.Entry(config_row1, width=8)
+        self.options["start_file"].pack(side=tk.LEFT, padx=(2, 8))
+        self.options["start_file"].bind('<FocusOut>', lambda e: self.on_option_changed("start_file", e.widget.get()))
+
+        ttk.Label(config_row1, text="结束档号:").pack(side=tk.LEFT)
+        self.options["end_file"] = ttk.Entry(config_row1, width=8)
+        self.options["end_file"].pack(side=tk.LEFT, padx=(2, 0))
+        self.options["end_file"].bind('<FocusOut>', lambda e: self.on_option_changed("end_file", e.widget.get()))
         
         # 绑定选择变化事件
         self.height_method_combo.bind('<<ComboboxSelected>>', self.on_height_method_changed)
@@ -143,9 +159,9 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.available_methods = available_methods
         self.method_display_names = method_display_names
 
-        # --- 路径配置 ---
-        self.path_frame = ttk.LabelFrame(main_frame, text="3. 配置路径", padding="2")
-        self.path_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
+        # --- 路径配置（紧凑型） ---
+        self.path_frame = ttk.LabelFrame(main_frame, text="配置路径", padding="1")
+        self.path_frame.pack(fill=tk.X, expand=False, pady=(0, 1))
 
         self.paths = {}
         self.path_widgets = {}  # 存储所有路径相关的控件
@@ -190,28 +206,6 @@ class DirectoryGeneratorGUI(tk.Tk):
             text="重置配置",
             command=self.reset_config
         ).pack(side=tk.LEFT)
-
-        # --- 可选参数 ---
-        optional_frame = ttk.LabelFrame(main_frame, text="4. 可选参数", padding="2")
-        optional_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
-
-        self.options = {}
-        opt_grid = ttk.Frame(optional_frame)
-        opt_grid.pack(fill=tk.X, expand=True)
-
-        ttk.Label(opt_grid, text="起始档号:").grid(
-            row=0, column=0, sticky=tk.W, padx=3, pady=1
-        )
-        self.options["start_file"] = ttk.Entry(opt_grid, width=10)
-        self.options["start_file"].grid(row=0, column=1, sticky=tk.W, padx=3, pady=1)
-        self.options["start_file"].bind('<FocusOut>', lambda e: self.on_option_changed("start_file", e.widget.get()))
-
-        ttk.Label(opt_grid, text="结束档号:").grid(
-            row=0, column=2, sticky=tk.W, padx=(10, 3), pady=1
-        )
-        self.options["end_file"] = ttk.Entry(opt_grid, width=10)
-        self.options["end_file"].grid(row=0, column=3, sticky=tk.W, padx=3, pady=1)
-        self.options["end_file"].bind('<FocusOut>', lambda e: self.on_option_changed("end_file", e.widget.get()))
 
         # --- 控制与日志区域 ---
         control_frame = ttk.Frame(main_frame)
