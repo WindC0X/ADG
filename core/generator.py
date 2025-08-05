@@ -416,19 +416,14 @@ def generate_one_archive_directory(
         row_twip = pt_to_twip(row_height * scale)
         left_twip = content_height_twip - curr_height_twip
         
-        # 修复：所有数据行都与上一行共用网格线（包括首行与标题行）
-        effective_row_twip = row_twip - GRID_TWIP  # 始终扣除共用网格线
-        
         # 向后兼容的点值计算（仅用于日志）
         scaled_row_height = row_height * scale
         left_points = content_height_points - current_height_points
-        effective_row_height = twip_to_pt(effective_row_twip)
         
-        # 生产环境移除详细的每行twip调试信息
-        
-        # 使用全twip精度比较，加1twip容差
-        need_break = (curr_height_twip + effective_row_twip - 1 > content_height_twip 
+        # ① 先用完整行高判断是否需要分页（避免"判页用扣减值"的问题）
+        need_break = (curr_height_twip + row_twip - 1 > content_height_twip 
                      and current_height_points > 0)
+        
         if need_break:
             # 补丁①：若后面已无数据，直接跳出循环，避免插空白分页
             has_more_rows = (row_idx + 1) < len(archive_data)  # 检查是否还有后续行
@@ -443,14 +438,20 @@ def generate_one_archive_directory(
                 # 正常情况：插入手动分页符
                 sheet.row_breaks.append(Break(id=current_row - 1))
                 logging.info(
-                    f"页码分割于{current_row -1}行后,(案卷 {archive_id})-twip比较: {curr_height_twip}+{effective_row_twip}-1 > {content_height_twip}, pt值: {current_height_points:.2f}/{content_height_points:.2f}, 当前行高 {scaled_row_height:.2f}(缩放{scale:.0%})"
+                    f"页码分割于{current_row -1}行后,(案卷 {archive_id})-twip比较: {curr_height_twip}+{row_twip}-1 > {content_height_twip}, pt值: {current_height_points:.2f}/{content_height_points:.2f}, 当前行高 {scaled_row_height:.2f}(缩放{scale:.0%})"
                 )
                 pages.append((page_start_row, current_row - 1))
                 page_start_row = current_row
                 current_height_points = print_title_row_height * scale
                 curr_height_twip = pt_to_twip(print_title_row_height * scale)
                 page_count += 1
+            
+            # ② 分页后，当前行成为新页首行，不扣 GRID_TWIP
+            effective_row_twip = row_twip
         else:
+            # 仍在同页，根据是否为首行决定是否扣减
+            is_first_row_on_page = (current_row == page_start_row)
+            effective_row_twip = row_twip if is_first_row_on_page else row_twip - GRID_TWIP
             # 当前行不会导致超出，正常累加行高
             current_height_points += scaled_row_height
         
@@ -464,7 +465,12 @@ def generate_one_archive_directory(
         and default_data_row_height > 0
     ):
         # 修复：使用twip精度计算填充空行数量，避免高估
-        fill_row_twip = pt_to_twip(default_data_row_height * scale) - GRID_TWIP  # 扣掉共用网格线
+        # ② 末页空行的行高计算 —— 同理首行不扣 GRID_TWIP
+        is_first_fill_row = (current_row == page_start_row)          # 仍在新页开始处
+        fill_row_twip = (
+            pt_to_twip(default_data_row_height * scale)
+            - (0 if is_first_fill_row else GRID_TWIP)
+        )
         remaining_twip = content_height_twip - curr_height_twip
         num_fill = max(0, (remaining_twip - 1) // fill_row_twip)  # 留1twip安全余量
         
