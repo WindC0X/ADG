@@ -276,6 +276,7 @@ def generate_one_archive_directory(
     direct_print=False,
     printer_name=None,
     print_copies=1,
+    cancel_flag=None,
 ):
     """
     为单个案卷生成目录，处理分页和内容自适应。

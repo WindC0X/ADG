@@ -94,11 +94,11 @@ class DirectoryGeneratorGUI(tk.Tk):
 
         # --- 顶部区域：目录类型和行高计算方案 ---
         top_frame = ttk.Frame(main_frame)
-        top_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
+        top_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
         
         # 左侧：目录类型选择
-        type_frame = ttk.LabelFrame(top_frame, text="1. 目录类型", padding="5")
-        type_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        type_frame = ttk.LabelFrame(top_frame, text="1. 目录类型", padding="2")
+        type_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 1))
         self.recipe_var = tk.StringVar()
         self.recipe_combo = ttk.Combobox(
             type_frame,
@@ -111,8 +111,8 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.recipe_combo.current(0)
 
         # 右侧：行高计算方案选择
-        height_frame = ttk.LabelFrame(top_frame, text="2. 行高计算方案", padding="5")
-        height_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        height_frame = ttk.LabelFrame(top_frame, text="2. 行高计算方案", padding="2")
+        height_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(1, 0))
         
         # 获取可用方案
         available_methods = get_available_methods()
@@ -144,8 +144,8 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.method_display_names = method_display_names
 
         # --- 路径配置 ---
-        self.path_frame = ttk.LabelFrame(main_frame, text="3. 配置路径", padding="5")
-        self.path_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
+        self.path_frame = ttk.LabelFrame(main_frame, text="3. 配置路径", padding="2")
+        self.path_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
 
         self.paths = {}
         self.path_widgets = {}  # 存储所有路径相关的控件
@@ -153,7 +153,7 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 创建路径网格容器
         self.path_grid = ttk.Frame(self.path_frame)
         self.path_grid.pack(fill=tk.X, expand=True)
-        self.path_grid.columnconfigure(1, weight=1)
+        self.path_grid.columnconfigure(1, weight=3)
 
         # 定义所有可能的路径配置
         self.all_path_specs = {
@@ -177,7 +177,7 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 添加配置管理按钮
         config_buttons_frame = ttk.Frame(self.path_frame)
-        config_buttons_frame.pack(fill=tk.X, pady=(3, 0))
+        config_buttons_frame.pack(fill=tk.X, pady=(1, 0))
         
         ttk.Button(
             config_buttons_frame,
@@ -192,38 +192,38 @@ class DirectoryGeneratorGUI(tk.Tk):
         ).pack(side=tk.LEFT)
 
         # --- 可选参数 ---
-        optional_frame = ttk.LabelFrame(main_frame, text="4. 可选参数", padding="5")
-        optional_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
+        optional_frame = ttk.LabelFrame(main_frame, text="4. 可选参数", padding="2")
+        optional_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
 
         self.options = {}
         opt_grid = ttk.Frame(optional_frame)
         opt_grid.pack(fill=tk.X, expand=True)
 
         ttk.Label(opt_grid, text="起始档号:").grid(
-            row=0, column=0, sticky=tk.W, padx=5, pady=2
+            row=0, column=0, sticky=tk.W, padx=3, pady=1
         )
-        self.options["start_file"] = ttk.Entry(opt_grid, width=20)
-        self.options["start_file"].grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
+        self.options["start_file"] = ttk.Entry(opt_grid, width=10)
+        self.options["start_file"].grid(row=0, column=1, sticky=tk.W, padx=3, pady=1)
         self.options["start_file"].bind('<FocusOut>', lambda e: self.on_option_changed("start_file", e.widget.get()))
 
         ttk.Label(opt_grid, text="结束档号:").grid(
-            row=0, column=2, sticky=tk.W, padx=(15, 5), pady=2
+            row=0, column=2, sticky=tk.W, padx=(10, 3), pady=1
         )
-        self.options["end_file"] = ttk.Entry(opt_grid, width=20)
-        self.options["end_file"].grid(row=0, column=3, sticky=tk.W, padx=5, pady=2)
+        self.options["end_file"] = ttk.Entry(opt_grid, width=10)
+        self.options["end_file"].grid(row=0, column=3, sticky=tk.W, padx=3, pady=1)
         self.options["end_file"].bind('<FocusOut>', lambda e: self.on_option_changed("end_file", e.widget.get()))
 
         # --- 控制与日志区域 ---
         control_frame = ttk.Frame(main_frame)
-        control_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        control_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 2))
 
         # 左侧：打印设置和控制按钮
         left_control = ttk.Frame(control_frame)
-        left_control.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        left_control.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 1))
         
         # 打印设置区域
-        print_frame = ttk.LabelFrame(left_control, text="打印设置", padding="3")
-        print_frame.pack(fill=tk.X, expand=False, pady=(0, 5))
+        print_frame = ttk.LabelFrame(left_control, text="打印设置", padding="1")
+        print_frame.pack(fill=tk.X, expand=False, pady=(0, 1))
         
         # 打印模式选择
         mode_frame = ttk.Frame(print_frame)
@@ -239,31 +239,31 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 打印机选择
         printer_frame = ttk.Frame(print_frame)
-        printer_frame.pack(fill=tk.X, pady=1)
+        printer_frame.pack(fill=tk.X, pady=0)
         
-        ttk.Label(printer_frame, text="打印机:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(printer_frame, text="打印机:").pack(side=tk.LEFT, padx=(0, 3))
         
         self.printer_var = tk.StringVar()
-        self.printer_combo = ttk.Combobox(printer_frame, textvariable=self.printer_var, width=25, state="readonly")
-        self.printer_combo.pack(side=tk.LEFT, padx=2)
+        self.printer_combo = ttk.Combobox(printer_frame, textvariable=self.printer_var, width=15, state="readonly")
+        self.printer_combo.pack(side=tk.LEFT, padx=1)
         
         # 刷新打印机按钮
-        self.refresh_printer_btn = ttk.Button(printer_frame, text="刷新", command=self.refresh_printers, width=8)
-        self.refresh_printer_btn.pack(side=tk.LEFT, padx=2)
+        self.refresh_printer_btn = ttk.Button(printer_frame, text="刷新", command=self.refresh_printers, width=6)
+        self.refresh_printer_btn.pack(side=tk.LEFT, padx=1)
         
         # 打印份数
         copies_frame = ttk.Frame(print_frame)
-        copies_frame.pack(fill=tk.X, pady=1)
+        copies_frame.pack(fill=tk.X, pady=0)
         
-        ttk.Label(copies_frame, text="份数:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(copies_frame, text="份数:").pack(side=tk.LEFT, padx=(0, 3))
         
         self.print_copies_var = tk.StringVar(value="1")
-        copies_spinbox = ttk.Spinbox(copies_frame, from_=1, to=10, width=5, textvariable=self.print_copies_var)
-        copies_spinbox.pack(side=tk.LEFT, padx=2)
+        copies_spinbox = ttk.Spinbox(copies_frame, from_=1, to=10, width=4, textvariable=self.print_copies_var)
+        copies_spinbox.pack(side=tk.LEFT, padx=1)
         
         # 批量打印按钮
         self.batch_print_btn = ttk.Button(print_frame, text="批量打印", command=self.batch_print_files, state="disabled")
-        self.batch_print_btn.pack(pady=2)
+        self.batch_print_btn.pack(pady=1)
         
         # 打印状态显示
         status_frame = ttk.Frame(print_frame)
@@ -274,12 +274,12 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.print_status_label.pack(side=tk.LEFT)
         
         # 打印间隔控制（折叠式）
-        interval_frame = ttk.LabelFrame(print_frame, text="间隔控制", padding="3")
-        interval_frame.pack(fill=tk.X, pady=2)
+        interval_frame = ttk.LabelFrame(print_frame, text="间隔控制", padding="2")
+        interval_frame.pack(fill=tk.X, pady=0)
         
         # 第一行：启用开关和任务数设置
         interval_top_frame = ttk.Frame(interval_frame)
-        interval_top_frame.pack(fill=tk.X, pady=1)
+        interval_top_frame.pack(fill=tk.X, pady=0)
         
         self.interval_enabled_var = tk.BooleanVar(value=True)
         interval_checkbox = ttk.Checkbutton(
@@ -288,7 +288,7 @@ class DirectoryGeneratorGUI(tk.Tk):
             variable=self.interval_enabled_var,
             command=self.on_interval_settings_changed
         )
-        interval_checkbox.pack(side=tk.LEFT, padx=(0, 8))
+        interval_checkbox.pack(side=tk.LEFT, padx=(0, 5))
         
         ttk.Label(interval_top_frame, text="每").pack(side=tk.LEFT)
         
@@ -297,11 +297,11 @@ class DirectoryGeneratorGUI(tk.Tk):
             interval_top_frame, 
             from_=1, 
             to=20, 
-            width=3, 
+            width=2, 
             textvariable=self.interval_task_count_var,
             command=self.on_interval_settings_changed
         )
-        task_count_spinbox.pack(side=tk.LEFT, padx=(1, 1))
+        task_count_spinbox.pack(side=tk.LEFT, padx=(0, 0))
         task_count_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
         
         ttk.Label(interval_top_frame, text="个任务休息").pack(side=tk.LEFT)
@@ -311,11 +311,11 @@ class DirectoryGeneratorGUI(tk.Tk):
             interval_top_frame, 
             from_=10, 
             to=300, 
-            width=3, 
+            width=2, 
             textvariable=self.interval_seconds_var,
             command=self.on_interval_settings_changed
         )
-        seconds_spinbox.pack(side=tk.LEFT, padx=(1, 1))
+        seconds_spinbox.pack(side=tk.LEFT, padx=(0, 0))
         seconds_spinbox.bind('<KeyRelease>', lambda e: self.on_interval_settings_changed())
         
         ttk.Label(interval_top_frame, text="秒").pack(side=tk.LEFT)
@@ -323,28 +323,43 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 跳过休息按钮
         self.skip_rest_btn = ttk.Button(
             interval_top_frame, 
-            text="跳过休息", 
+            text="跳过", 
             command=self.skip_printer_rest,
             state="disabled",
-            width=8
+            width=5
         )
-        self.skip_rest_btn.pack(side=tk.RIGHT, padx=2)
+        self.skip_rest_btn.pack(side=tk.RIGHT, padx=1)
         
         # 间隔状态显示
         self.interval_status_var = tk.StringVar() 
         self.interval_status_label = ttk.Label(print_frame, textvariable=self.interval_status_var, font=("Arial", 8), foreground="blue")
-        self.interval_status_label.pack(fill=tk.X, pady=1)
+        self.interval_status_label.pack(fill=tk.X, pady=0)
 
+        # 进度条
+        self.progress_var = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(
+            left_control, 
+            variable=self.progress_var,
+            maximum=100,
+            mode='determinate',
+            length=180
+        )
+        self.progress_bar.pack(pady=(0, 1))
+        
+        # 进度标签
+        self.progress_label = ttk.Label(left_control, text="准备就绪", font=("Arial", 8))
+        self.progress_label.pack(pady=(0, 1))
+        
         # 开始按钮
         self.start_button = ttk.Button(
-            left_control, text="开始生成", command=self.run_generation_thread
+            left_control, text="开始生成", command=self.run_generation_thread, width=12
         )
-        self.start_button.pack(pady=5)
+        self.start_button.pack(pady=1)
 
         # 右侧：日志输出
-        log_frame = ttk.LabelFrame(control_frame, text="日志", padding="3")
-        log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-        self.log_text = ScrolledText(log_frame, state="disabled", height=10, width=50, wrap=tk.WORD)
+        log_frame = ttk.LabelFrame(control_frame, text="日志", padding="1")
+        log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(1, 0))
+        self.log_text = ScrolledText(log_frame, state="disabled", height=6, width=40, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def show_initial_method_info(self):
@@ -418,15 +433,16 @@ class DirectoryGeneratorGUI(tk.Tk):
             label = ttk.Label(self.path_grid, text=text)
             
             # 创建输入框
-            entry = ttk.Entry(self.path_grid, width=50)
+            entry = ttk.Entry(self.path_grid, width=40)
             entry.bind('<FocusOut>', lambda e, k=key: self.on_path_changed(k, e.widget.get()))
             
             # 创建浏览按钮
             is_dir = "folder" in key
             button = ttk.Button(
                 self.path_grid,
-                text="浏览...",
+                text="浏览",
                 command=lambda e=entry, d=is_dir, k=key: self.browse_path(e, d, k),
+                width=6
             )
             
             # 存储控件引用
@@ -457,9 +473,9 @@ class DirectoryGeneratorGUI(tk.Tk):
         for path_key in required_paths:
             if path_key in self.path_widgets:
                 widgets = self.path_widgets[path_key]
-                widgets['label'].grid(row=current_row, column=0, sticky=tk.W, padx=5, pady=2)
-                widgets['entry'].grid(row=current_row, column=1, sticky=tk.EW, padx=5, pady=2)
-                widgets['button'].grid(row=current_row, column=2, sticky=tk.E, padx=5, pady=2)
+                widgets['label'].grid(row=current_row, column=0, sticky=tk.W, padx=3, pady=1)
+                widgets['entry'].grid(row=current_row, column=1, sticky=tk.EW, padx=3, pady=1)
+                widgets['button'].grid(row=current_row, column=2, sticky=tk.E, padx=3, pady=1)
                 current_row += 1
         
         # 更新界面状态标题
@@ -628,16 +644,43 @@ class DirectoryGeneratorGUI(tk.Tk):
     def process_log_queue(self):
         """从队列中获取日志消息并显示在文本控件中。"""
         try:
-            while True:
-                record = self.log_queue.get(block=False)
+            batch_size = 10  # 批量处理，减少UI更新频率
+            messages = []
+            
+            for _ in range(batch_size):
+                try:
+                    record = self.log_queue.get(block=False)
+                    messages.append(record)
+                except queue.Empty:
+                    break
+            
+            if messages:
                 self.log_text.configure(state="normal")
-                self.log_text.insert(tk.END, record + "\n")
+                self.log_text.insert(tk.END, "\n".join(messages) + "\n")
+                # 限制日志行数，防止内存占用过多
+                lines = self.log_text.get("1.0", tk.END).split("\n")
+                if len(lines) > 500:  # 保留最后500行
+                    self.log_text.delete("1.0", f"{len(lines)-500}.0")
                 self.log_text.configure(state="disabled")
                 self.log_text.see(tk.END)
-        except queue.Empty:
+                
+        except Exception as e:
+            # 防止日志处理异常影响主程序
             pass
-        self.after(100, self.process_log_queue)
+        self.after(200, self.process_log_queue)  # 降低更新频率
 
+    def update_progress(self, value, text):
+        """更新进度条和标签"""
+        self.after(0, lambda: self._safe_update_progress(value, text))
+    
+    def _safe_update_progress(self, value, text):
+        """线程安全的进度更新"""
+        try:
+            self.progress_var.set(value)
+            self.progress_label.config(text=text)
+        except:
+            pass
+    
     def monitor_print_status(self):
         """监控打印状态"""
         try:
@@ -806,7 +849,12 @@ class DirectoryGeneratorGUI(tk.Tk):
             messagebox.showwarning("任务进行中", "已有任务正在运行，请等待完成后再启动新任务")
             return
         
+        # 创建取消标志
+        self.cancel_flag = threading.Event()
+        
         self.start_button.config(state="disabled", text="正在生成...")
+        self.progress_var.set(0)
+        self.progress_label.config(text="正在初始化...")
         
         # 创建并启动新的工作线程
         self.current_task_thread = threading.Thread(
@@ -816,12 +864,40 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 不设置为守护线程，确保任务完成
         self.current_task_thread.daemon = False
         self.current_task_thread.start()
+        
+        # 添加取消按钮
+        if hasattr(self, 'cancel_button'):
+            self.cancel_button.pack(side=tk.LEFT, padx=2)
+        else:
+            self.cancel_button = ttk.Button(
+                self, 
+                text="取消", 
+                command=self.cancel_generation,
+                width=8
+            )
+            self.cancel_button.pack(side=tk.LEFT, padx=2)
+    
+    def cancel_generation(self):
+        """取消当前正在运行的任务"""
+        if hasattr(self, 'cancel_flag'):
+            self.cancel_flag.set()
+            logging.info("用户请求取消任务")
+            self.progress_label.config(text="正在取消...")
+            
+            # 禁用取消按钮
+            if hasattr(self, 'cancel_button'):
+                self.cancel_button.config(state="disabled")
 
     def generation_controller(self):
         """
         控制器方法：获取UI参数，验证并调用相应的后端配方函数。
         """
         try:
+            # 检查取消标志
+            if hasattr(self, 'cancel_flag') and self.cancel_flag.is_set():
+                logging.info("任务被用户取消")
+                return
+                
             recipe = self.recipe_var.get()
             params = {key: widget.get() for key, widget in self.paths.items()}
             params.update({key: widget.get() for key, widget in self.options.items()})
@@ -832,9 +908,15 @@ class DirectoryGeneratorGUI(tk.Tk):
             print_copies = int(self.print_copies_var.get()) if print_mode in ["direct", "batch"] else 1
             direct_print = print_mode == "direct"
 
+            # 更新进度
+            self.update_progress(10, "正在验证参数...")
+            
             logging.info(f"任务开始: {recipe}")
             if direct_print and printer_name:
                 logging.info(f"边转换边打印模式，打印机: {printer_name}，份数: {print_copies}")
+            
+            # 模拟参数验证过程
+            self.update_progress(20, "正在加载文件...")
 
             if recipe == "全引目录":
                 if not all(
@@ -849,6 +931,13 @@ class DirectoryGeneratorGUI(tk.Tk):
                         "错误", "生成[全引目录]需要提供所有对应的文件和文件夹路径。"
                     )
                     return
+                
+                # 检查取消标志
+                if hasattr(self, 'cancel_flag') and self.cancel_flag.is_set():
+                    logging.info("任务被用户取消")
+                    return
+                    
+                self.update_progress(30, "正在生成全引目录...")
                 create_qy_full_index(
                     jn_catalog_path=params["jn_catalog_path"],
                     aj_catalog_path=params["aj_catalog_path"],
@@ -859,6 +948,7 @@ class DirectoryGeneratorGUI(tk.Tk):
                     direct_print=direct_print,
                     printer_name=printer_name,
                     print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
                 )
             elif recipe == "案卷目录":
                 if not all(
@@ -872,6 +962,13 @@ class DirectoryGeneratorGUI(tk.Tk):
                         "错误", "生成[案卷目录]需要提供对应的文件和文件夹路径。"
                     )
                     return
+                
+                # 检查取消标志
+                if hasattr(self, 'cancel_flag') and self.cancel_flag.is_set():
+                    logging.info("任务被用户取消")
+                    return
+                    
+                self.update_progress(30, "正在生成案卷目录...")
                 create_aj_index(
                     catalog_path=params["aj_catalog_path"],
                     template_path=params["template_path"],
@@ -881,6 +978,7 @@ class DirectoryGeneratorGUI(tk.Tk):
                     direct_print=direct_print,
                     printer_name=printer_name,
                     print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
                 )
             elif recipe in ["卷内目录", "简化目录"]:
                 # 根据不同的目录类型使用对应的路径
@@ -900,6 +998,13 @@ class DirectoryGeneratorGUI(tk.Tk):
                         "错误", f"生成[{recipe}]需要提供对应的文件和文件夹路径。"
                     )
                     return
+                
+                # 检查取消标志
+                if hasattr(self, 'cancel_flag') and self.cancel_flag.is_set():
+                    logging.info("任务被用户取消")
+                    return
+                    
+                self.update_progress(30, f"正在生成{recipe}...")
                 create_jn_or_jh_index(
                     catalog_path=params[catalog_path_key],
                     template_path=params["template_path"],
@@ -910,9 +1015,14 @@ class DirectoryGeneratorGUI(tk.Tk):
                     direct_print=direct_print,
                     printer_name=printer_name,
                     print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
                 )
 
             logging.info("任务成功完成！")
+            
+            # 更新进度显示
+            self.progress_var.set(100)
+            self.progress_label.config(text="任务完成！")
             
             # 显示性能统计
             try:
@@ -968,6 +1078,16 @@ class DirectoryGeneratorGUI(tk.Tk):
             messagebox.showerror("意外错误", user_msg)
         finally:
             self.start_button.config(state="normal", text="开始生成")
+            self.progress_var.set(0)
+            self.progress_label.config(text="准备就绪")
+            
+            # 移除取消按钮
+            if hasattr(self, 'cancel_button'):
+                self.cancel_button.pack_forget()
+                
+            # 清理取消标志
+            if hasattr(self, 'cancel_flag'):
+                del self.cancel_flag
 
 
 if __name__ == "__main__":

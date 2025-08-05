@@ -29,6 +29,7 @@ def create_qy_full_index(
     direct_print=False,
     printer_name=None,
     print_copies=1,
+    cancel_flag=None,
 ):
     """
     配方：生成传统文书全引目录。
@@ -73,6 +74,11 @@ def create_qy_full_index(
         total_pages = 0
 
         for i, archive_id in enumerate(subset_ids, start=1):
+            # 检查取消标志
+            if cancel_flag and cancel_flag.is_set():
+                logging.info("检测到取消标志，停止生成全引目录")
+                break
+                
             # 筛选当前案卷的数据
             current_archive_jn_data = jn_data[jn_data[ARCHIVE_ID_COLUMN] == archive_id]
 
@@ -110,6 +116,7 @@ def create_qy_full_index(
                 direct_print=direct_print,
                 printer_name=printer_name,
                 print_copies=print_copies,
+                cancel_flag=cancel_flag
             )
 
     logging.info(f"--- 生成结束 ---")
@@ -119,7 +126,7 @@ def create_qy_full_index(
 
 def create_aj_index(
     catalog_path, template_path, output_folder, start_file="", end_file="",
-    direct_print=False, printer_name=None, print_copies=1
+    direct_print=False, printer_name=None, print_copies=1, cancel_flag=None
 ):
     """配方：生成案卷目录。"""
     logging.info("--- 开始生成案卷目录 ---")
@@ -179,6 +186,7 @@ def create_aj_index(
             direct_print=direct_print,
             printer_name=printer_name,
             print_copies=print_copies,
+            cancel_flag=cancel_flag
         )
 
     logging.info(f"--- 生成结束 ---")
@@ -198,6 +206,7 @@ def create_jn_or_jh_index(
     direct_print=False,
     printer_name=None,
     print_copies=1,
+    cancel_flag=None,
 ):
     """配方：生成卷内目录 或 简化目录。"""
     logging.info(f"--- 开始生成 {recipe_name} ---")
@@ -245,6 +254,11 @@ def create_jn_or_jh_index(
         rng.font.size = 11
 
         for index, id in enumerate(subset_ids, start=1):
+            # 检查取消标志
+            if cancel_flag and cancel_flag.is_set():
+                logging.info("检测到取消标志，停止生成卷内目录")
+                break
+                
             data = subset_data[subset_data[ARCHIVE_ID_COLUMN] == id]
             total_pages = generate_one_archive_directory(
                 archive_data=data,
@@ -259,6 +273,7 @@ def create_jn_or_jh_index(
                 direct_print=direct_print,
                 printer_name=printer_name,
                 print_copies=print_copies,
+                cancel_flag=cancel_flag
             )
 
     logging.info(f"--- 生成结束 ---")
