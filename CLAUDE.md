@@ -14,7 +14,25 @@ python main.py
 ```
 
 ### 安装依赖
+
+**生产环境（推荐）**:
 ```bash
+# 使用精确版本锁定，确保环境一致性
+pip install -r requirements.lock
+```
+
+**开发环境**:
+```bash
+# 安装开发依赖（包含代码质量工具）
+pip install -r requirements-dev.txt
+
+# 设置Git预提交钩子
+pre-commit install
+```
+
+**快速开始**:
+```bash
+# 允许版本范围的快速安装
 pip install -r requirements.txt
 ```
 
@@ -35,11 +53,16 @@ python height_measure/pillow_measure.py
   - `enhanced_height_calculator.py`: 多方案行高计算器（xlwings/GDI/Pillow）
   - `generator.py`: Excel目录生成核心逻辑，包含分页算法和格式化
   - `transform_excel.py`: Excel文件格式转换工具
+  - `node_interfaces.py`: 标准化节点接口和类型定义（新增）
 - **height_measure/**: 精确行高测量模块
   - `gdi_measure.py`: Windows GDI API精确测量（完美匹配打印预览）
   - `pillow_measure.py`: 基于Pillow的独立计算方案
 - **utils/**: 业务配方和工具函数
   - `recipes.py`: 不同类型目录的生成配方（全引目录、案卷目录、卷内目录、简化目录）
+  - `service_manager.py`: 第三方服务统一管理器（新增）
+  - `credential_manager.py`: 安全凭据管理（新增）
+- **docs/**: 项目文档
+  - `api_interface_specification.md`: API接口规范（新增）
 
 ### 行高计算架构
 项目核心特色是支持三种行高计算方案：
@@ -97,3 +120,104 @@ GRID_TWIP = 15             # 共用网格线宽度
 
 ### 字体规格
 项目针对SimSun 11pt字体优化，校准数据位于各测量模块的CALIB_TABLE中。
+
+## 开发规范
+
+### 代码质量标准
+
+**依赖管理**:
+- 生产环境使用 `requirements.lock` 确保版本一致性
+- 开发环境使用 `requirements-dev.txt` 包含代码质量工具
+- 定期更新锁定文件版本（经过完整测试后）
+
+**代码风格**:
+- 遵循 PEP 8 规范，行长度限制88字符
+- 使用 Black 进行代码格式化
+- 使用 isort 进行导入排序
+- 使用 flake8 进行代码检查
+
+**类型注解**:
+- 所有新代码必须包含类型注解
+- 使用 `from typing import` 导入类型
+- 参考 `core/node_interfaces.py` 中的标准类型定义
+
+**Git工作流**:
+```bash
+# 开发前安装预提交钩子
+pre-commit install
+
+# 提交前自动运行代码检查
+git commit -m "feat: 添加新功能"
+
+# 手动运行全部检查
+pre-commit run --all-files
+```
+
+### 节点开发规范
+
+**标准接口**:
+- 所有处理节点继承 `ProcessingNode` 基类
+- 实现 `process()`, `validate_input()`, `get_schema()` 方法
+- 使用 `NodeInput` 和 `NodeOutput` 标准数据格式
+
+**示例实现**:
+```python
+from core.node_interfaces import ProcessingNode, NodeInput, NodeOutput, ValidationResult
+
+class CustomNode(ProcessingNode):
+    def validate_input(self, input_data: NodeInput) -> ValidationResult:
+        # 输入验证逻辑
+        pass
+    
+    def process(self, input_data: NodeInput) -> NodeOutput:
+        # 核心处理逻辑
+        pass
+    
+    def get_schema(self) -> Dict[str, Any]:
+        # 配置Schema定义
+        pass
+```
+
+**性能要求**:
+- 数据I/O节点: 响应时间 ≤ 1秒
+- 处理节点: 响应时间 ≤ 5秒  
+- AI节点: 响应时间 ≤ 30秒
+- 单节点内存使用 ≤ 500MB（AI节点 ≤ 2GB）
+
+### 测试规范
+
+**测试分类**:
+- 冒烟测试: `python tests/run_tests.py smoke` (< 30秒)
+- 单元测试: `python tests/run_tests.py unit` (1-3分钟)
+- 集成测试: `python tests/run_tests.py integration` (2-5分钟)
+- 性能测试: `python tests/run_tests.py performance` (3-10分钟)
+
+**测试覆盖率要求**:
+- 核心模块: ≥ 90%
+- 节点引擎: ≥ 85%
+- 工具模块: ≥ 75%
+- 总体覆盖率: ≥ 80%
+
+### 安全规范
+
+**凭据管理**:
+- 使用 `utils/credential_manager.py` 安全存储API密钥
+- 主密码保护，AES-256-GCM加密
+- 完整审计日志，防篡改哈希链
+
+**文件处理**:
+- 使用 `utils/file_validator.py` 验证文件路径
+- 防止目录遍历攻击
+- 限制文件类型和大小
+
+### 配置管理
+
+**第三方服务配置**:
+- 参考 `.claude/specs/third_party_integration/` 规范
+- 使用服务健康检查和自动降级
+- 8GB内存环境下的资源分配优化
+
+**详细规范文档**:
+- API接口规范: `docs/api_interface_specification.md`
+- 第三方集成: `.claude/specs/third_party_integration/`
+- 风险管理: `.claude/specs/risk_management/`

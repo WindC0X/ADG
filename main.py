@@ -6,6 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 import sys
 import os
+import pandas as pd
 
 # 添加当前目录到Python路径（支持直接运行）
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +24,7 @@ from core.enhanced_height_calculator import (
 )
 from utils.config_manager import get_config_manager
 from utils.file_validator import validate_excel_file, validate_output_directory
+from utils.feature_manager import get_feature_manager, is_feature_enabled
 
 
 class QueueHandler(logging.Handler):
@@ -38,11 +40,14 @@ class QueueHandler(logging.Handler):
         # 定义需要在GUI中精简显示的关键词
         self.simplify_keywords = [
             'twip比较', '页码分割', 'pt值:', '当前行高', '缩放',
-            '正在计算行高', '测量文本', '字体规格'
+            '正在计算行高', '测量文本', '字体规格', '末页', '填充', 'twip'
         ]
         # 定义完全过滤的关键词（不在GUI显示）
         self.filter_keywords = [
-            'DEBUG', 'trace', '调试'
+            'DEBUG', 'trace', '调试',
+            '开始更新文件列表', '开始解析档案数据', '解析得到', '过滤后剩余', '文件列表更新完成',
+            '成功读取Excel文件', '使用列', '添加文件', '解析完成，预计生成', '开始生成文件列表',
+            '分组数量', '目录类型:', '路径不存在或为空', '路径:', '列名:', '行数:'
         ]
 
     def emit(self, record):
@@ -84,6 +89,20 @@ class QueueHandler(logging.Handler):
                     filename = message.split('(')[1].split(')')[0]
                     return f"{timestamp} - 🔄 正在处理: {filename}"
             
+            # 末页填充信息 -> 简化显示
+            elif '末页' in message and '填充' in message:
+                # 提取关键信息：文件名、页码、填充行数
+                import re
+                file_match = re.search(r'案卷\s+([^,]+)', message)
+                page_match = re.search(r'页\s+(\d+)', message) 
+                fill_match = re.search(r'填充\s+(\d+)空行', message)
+                
+                if file_match and page_match and fill_match:
+                    filename = file_match.group(1)
+                    page_num = page_match.group(1)
+                    fill_rows = fill_match.group(1)
+                    return f"{timestamp} - 📋 {filename}: 第{page_num}页填充{fill_rows}行"
+            
             # 文件处理完成
             elif '处理完成' in message or '生成完成' in message:
                 return message  # 保持完整
@@ -111,6 +130,10 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 初始化配置管理器
         self.config_manager = get_config_manager()
         
+        # 初始化特性标志管理器
+        self.feature_manager = get_feature_manager()
+        self._initialize_feature_flags()
+        
         # 初始化线程管理
         self.current_task_thread = None
         self.shutdown_flag = threading.Event()
@@ -118,6 +141,11 @@ class DirectoryGeneratorGUI(tk.Tk):
         # 初始化打印服务
         from utils.print_service import get_print_service
         self.print_service = get_print_service()
+        
+        # 初始化文件列表相关属性
+        self.file_list_data = []  # 存储文件列表数据
+        self.filtered_file_list = []  # 存储过滤后的文件列表
+        self.selected_files = set()  # 存储用户选择的文件
         
         self.title("统一目录生成器 v4.0 (Tkinter版)")
         
@@ -159,6 +187,9 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 初始化完成后显示当前方案信息
         self.after(200, self.show_initial_method_info)
+        
+        # 延迟初始化文件列表
+        self.after(300, self.update_file_list)
         
         # 启动打印状态监控
         self.after(1000, self.monitor_print_status)
@@ -294,6 +325,57 @@ class DirectoryGeneratorGUI(tk.Tk):
         left_control = ttk.Frame(control_frame)
         left_control.pack(side=tk.LEFT, fill=tk.Y, expand=False, padx=(0, 3))
         
+        # 中间：文件列表区域（减小占用空间）
+        file_list_frame = ttk.LabelFrame(control_frame, text="文件列表", padding="3")
+        file_list_frame.pack(side=tk.LEFT, fill=tk.Y, expand=False, padx=(0, 3))
+
+        # 操作控制（紧凑布局）
+        control_row = ttk.Frame(file_list_frame)
+        control_row.pack(fill=tk.X, pady=(0, 2))
+        
+        # 选择控制
+        ttk.Button(control_row, text="全选", command=self.select_all_files, width=6).pack(side=tk.LEFT, padx=1)
+        ttk.Button(control_row, text="全不选", command=self.deselect_all_files, width=6).pack(side=tk.LEFT, padx=1)
+        ttk.Button(control_row, text="反选", command=self.invert_selection, width=6).pack(side=tk.LEFT, padx=1)
+        ttk.Button(control_row, text="刷新", command=self.update_file_list, width=6).pack(side=tk.LEFT, padx=1)
+        
+        # 转换模式选择
+        ttk.Separator(control_row, orient='vertical').pack(side=tk.LEFT, fill='y', padx=5)
+        self.convert_mode_var = tk.StringVar(value="all")
+        ttk.Radiobutton(control_row, text="全部转换", variable=self.convert_mode_var, value="all").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(control_row, text="选中转换", variable=self.convert_mode_var, value="selected").pack(side=tk.LEFT, padx=2)
+        
+        # 排序状态提示已移除
+
+        # 文件列表显示（使用TreeView提供表格格式）
+        # 创建TreeView（减少高度节省空间）
+        columns = ('序号', '文件名', '目录条数')
+        self.file_treeview = ttk.Treeview(file_list_frame, columns=columns, show='headings', height=8, selectmode='extended')
+        
+        # 初始化排序状态
+        self.sort_column = '序号'  # 当前排序列
+        self.sort_reverse = False  # 是否倒序
+        
+        # 设置列标题并绑定点击事件
+        for col in columns:
+            self.file_treeview.heading(col, text=col, command=lambda c=col: self.on_column_click(c))
+        
+        # 设置列宽（优化空间利用，总宽度控制在350左右）
+        self.file_treeview.column('序号', width=40, anchor='center')
+        self.file_treeview.column('文件名', width=240, anchor='w')
+        self.file_treeview.column('目录条数', width=60, anchor='center')
+        
+        # 添加滚动条
+        scrollbar = ttk.Scrollbar(file_list_frame, orient='vertical', command=self.file_treeview.yview)
+        self.file_treeview.configure(yscrollcommand=scrollbar.set)
+        
+        # 布局（不扩展，固定宽度）
+        self.file_treeview.pack(side='left', fill='y', expand=False, pady=2)
+        scrollbar.pack(side='right', fill='y')
+        
+        # 绑定选择事件
+        self.file_treeview.bind('<<TreeviewSelect>>', self.on_file_selection_changed)
+
         # 打印设置区域（紧凑布局）
         print_frame = ttk.LabelFrame(left_control, text="打印设置", padding="3")
         print_frame.pack(fill=tk.X, expand=False, pady=(0, 2))
@@ -415,10 +497,22 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.progress_label.pack(pady=1)
         
         # 开始按钮
+        button_container = ttk.Frame(left_control)
+        button_container.pack(pady=2)
+        
         self.start_button = ttk.Button(
-            left_control, text="开始生成", command=self.run_generation_thread, width=15
+            button_container, text="开始生成", command=self.run_generation_thread, width=15
         )
-        self.start_button.pack(pady=2)
+        self.start_button.pack(side=tk.LEFT)
+        
+        # 预创建取消按钮但不显示
+        self.cancel_button = ttk.Button(
+            button_container, 
+            text="取消任务", 
+            command=self.cancel_generation,
+            width=10
+        )
+        # 初始时不显示取消按钮
 
         # 右侧：日志输出（适应小窗口）
         log_frame = ttk.LabelFrame(control_frame, text="日志", padding="3")
@@ -489,6 +583,9 @@ class DirectoryGeneratorGUI(tk.Tk):
         
         # 更新路径显示
         self.update_path_visibility()
+        
+        # 更新文件列表
+        self.update_file_list()
 
     def create_all_path_widgets(self):
         """创建所有路径控件"""
@@ -564,11 +661,19 @@ class DirectoryGeneratorGUI(tk.Tk):
         """当路径改变时的回调函数"""
         self.config_manager.set_path(path_key, path_value)
         self.config_manager.save_config()
+        
+        # 如果是目录文件路径变更，更新文件列表
+        if path_key in ["jn_catalog_path", "aj_catalog_path", "jh_catalog_path"]:
+            self.update_file_list()
 
     def on_option_changed(self, option_key, option_value):
         """当可选参数改变时的回调函数"""
         self.config_manager.set_option(option_key, option_value)
         self.config_manager.save_config()
+        
+        # 如果是档号范围变更，更新文件列表
+        if option_key in ["start_file", "end_file"]:
+            self.update_file_list()
 
     def load_config(self):
         """从配置文件加载设置"""
@@ -689,6 +794,11 @@ class DirectoryGeneratorGUI(tk.Tk):
                     self.config_manager.set_path(path_key, path)
                     self.config_manager.save_config()
                     logging.info(f"已选择文件: {path}")
+                    
+                    # 如果是档案数据文件，自动更新文件列表
+                    if path_key in ['jn_catalog_path', 'aj_catalog_path', 'jh_catalog_path']:
+                        self.after(100, self.update_file_list)  # 延迟更新避免界面卡顿
+                        
                 else:
                     messagebox.showerror("文件错误", 
                                        "选择的文件不存在、格式不支持或文件过大\n"
@@ -705,10 +815,42 @@ class DirectoryGeneratorGUI(tk.Tk):
             self.load_config()
             logging.info("配置已重置到默认值")
 
+    def _initialize_feature_flags(self):
+        """初始化特性标志配置。"""
+        from utils.feature_manager import FeatureFlagStatus, ValidationMode
+        
+        # 创建节点引擎特性标志
+        try:
+            self.feature_manager.create_flag(
+                name="node_engine",
+                description="Enable node-based execution engine for directory generation",
+                status=FeatureFlagStatus.DISABLED,  # 初始为禁用状态
+                rollout_percentage=0.0,
+                validation_mode=ValidationMode.STRICT,
+                expires_in_days=90
+            )
+            logging.info("Created node_engine feature flag")
+        except ValueError:
+            # 标志已存在，跳过
+            logging.debug("node_engine feature flag already exists")
+        
+        # 创建影子写入验证标志
+        try:
+            self.feature_manager.create_flag(
+                name="shadow_validation",
+                description="Enable shadow-write validation between legacy and node implementations",
+                status=FeatureFlagStatus.DISABLED,
+                validation_mode=ValidationMode.TOLERANT,
+                expires_in_days=30
+            )
+            logging.info("Created shadow_validation feature flag")
+        except ValueError:
+            logging.debug("shadow_validation feature flag already exists")
+
     def process_log_queue(self):
         """从队列中获取日志消息并显示在文本控件中。"""
         try:
-            batch_size = 10  # 批量处理，减少UI更新频率
+            batch_size = 20  # 增加批量处理数量，加快显示速度
             messages = []
             
             for _ in range(batch_size):
@@ -731,7 +873,7 @@ class DirectoryGeneratorGUI(tk.Tk):
         except Exception as e:
             # 防止日志处理异常影响主程序
             pass
-        self.after(200, self.process_log_queue)  # 降低更新频率
+        self.after(100, self.process_log_queue)  # 提高更新频率，从200ms改为100ms
 
     def update_progress(self, value, text):
         """更新进度条和标签"""
@@ -852,6 +994,286 @@ class DirectoryGeneratorGUI(tk.Tk):
             logging.error(f"跳过休息时间失败: {e}")
             messagebox.showerror("错误", f"跳过休息时间失败: {e}")
     
+    def parse_archive_data(self, catalog_path):
+        """解析档案数据文件，生成将要输出的目录文件列表"""
+        try:
+            # 处理.xls文件转换
+            if catalog_path.endswith('.xls'):
+                from core.transform_excel import xls2xlsx
+                catalog_path = xls2xlsx(catalog_path)
+            
+            # 读取Excel数据
+            df = pd.read_excel(catalog_path)
+            logging.info(f"成功读取Excel文件，列名: {list(df.columns)}, 行数: {len(df)}")
+            
+            # 根据档案数据按档号分组，生成将要输出的文件列表
+            file_list = []
+            
+            # 尝试多种可能的档号列名
+            possible_file_number_columns = ['案卷档号', '档号', '文件号', '编号', 'file_number', 'number', '序号']
+            file_number_col = None
+            
+            for col in possible_file_number_columns:
+                if col in df.columns:
+                    file_number_col = col
+                    break
+            
+            if file_number_col:
+                logging.info(f"使用列 '{file_number_col}' 作为档号列")
+                
+                # 按档号分组统计
+                file_groups = {}
+                for idx, row in df.iterrows():
+                    try:
+                        file_number = str(row[file_number_col]).strip()
+                        if file_number and file_number != 'nan':
+                            # 对于案卷档号，每个不同的档号就是一个分组
+                            # 不需要去掉后缀，因为每个档号对应一个独立的档案
+                            main_number = file_number
+                            
+                            if main_number not in file_groups:
+                                file_groups[main_number] = 0
+                            file_groups[main_number] += 1
+                    except Exception as row_error:
+                        logging.warning(f"跳过第{idx}行，解析错误: {row_error}")
+                        continue
+                
+                # 生成文件列表
+                logging.info(f"开始生成文件列表，分组数量: {len(file_groups)}")
+                for main_number, item_count in file_groups.items():
+                    # 生成预期的输出文件名（与实际生成逻辑保持一致）
+                    # 从日志看：卷内目录_C001-ZYZS2023-Y-1105.xlsx
+                    safe_name = main_number.replace('·', '')  # 移除·符号
+                    display_name = f"卷内目录_{safe_name}"
+                    
+                    logging.info(f"添加文件: {display_name}, 条目数: {item_count}")
+                    file_list.append({
+                        'file_number': main_number,
+                        'display_name': display_name,
+                        'item_count': item_count
+                    })
+                
+            else:
+                # 如果没有找到档号列，假设生成单个文件
+                logging.warning(f"未找到档号列，可用列: {list(df.columns)}，假设生成单个文件")
+                file_list.append({
+                    'file_number': "未知档号",
+                    'display_name': "目录文件",
+                    'item_count': len(df)
+                })
+            
+            logging.info(f"解析完成，预计生成 {len(file_list)} 个目录文件")
+            return file_list
+        except Exception as e:
+            logging.error(f"解析档案数据失败: {e}")
+            return []
+    
+    def update_file_list(self):
+        """更新文件列表显示"""
+        try:
+            logging.info("开始更新文件列表")
+            # 获取当前选择的目录类型和对应路径
+            recipe = self.recipe_var.get()
+            catalog_path = None
+            
+            if recipe == "卷内目录":
+                catalog_path = self.paths["jn_catalog_path"].get()
+            elif recipe == "案卷目录":
+                catalog_path = self.paths["aj_catalog_path"].get()
+            elif recipe == "简化目录":
+                catalog_path = self.paths["jh_catalog_path"].get()
+            elif recipe == "全引目录":
+                # 优先使用卷内目录数据
+                catalog_path = self.paths["jn_catalog_path"].get()
+                if not catalog_path:
+                    catalog_path = self.paths["aj_catalog_path"].get()
+            
+            logging.info(f"目录类型: {recipe}, 路径: {catalog_path}")
+            
+            if not catalog_path or not os.path.exists(catalog_path):
+                logging.warning(f"路径不存在或为空: {catalog_path}")
+                self.file_list_data = []
+                self.filtered_file_list = []
+                self.refresh_file_listbox()
+                return
+            
+            # 解析档案数据
+            logging.info(f"开始解析档案数据: {catalog_path}")
+            self.file_list_data = self.parse_archive_data(catalog_path)
+            logging.info(f"解析得到 {len(self.file_list_data)} 条数据")
+            
+            # 应用档号范围过滤
+            self.apply_file_range_filter()
+            logging.info(f"过滤后剩余 {len(self.filtered_file_list)} 条数据")
+            
+            # 应用排序
+            self.apply_file_sort()
+            
+            # 刷新界面显示
+            self.refresh_file_listbox()
+            logging.info("文件列表更新完成")
+            
+        except Exception as e:
+            logging.error(f"更新文件列表失败: {e}")
+            import traceback
+            logging.error(f"详细错误: {traceback.format_exc()}")
+    
+    
+    def apply_file_range_filter(self):
+        """根据档号范围过滤文件列表"""
+        start_file = self.options["start_file"].get().strip()
+        end_file = self.options["end_file"].get().strip()
+        
+        if not start_file and not end_file:
+            self.filtered_file_list = self.file_list_data.copy()
+            return
+        
+        filtered = []
+        for file_info in self.file_list_data:
+            file_number = file_info['file_number']
+            
+            # 检查起始档号
+            if start_file and file_number < start_file:
+                continue
+                
+            # 检查结束档号
+            if end_file and file_number > end_file:
+                continue
+                
+            filtered.append(file_info)
+        
+        self.filtered_file_list = filtered
+    
+
+    def on_column_click(self, column):
+        """列标题点击排序"""
+        # 如果点击的是当前排序列，则切换升降序
+        if self.sort_column == column:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            # 切换到新列，默认升序
+            self.sort_column = column
+            self.sort_reverse = False
+        
+        # 更新列标题显示排序状态
+        self.update_column_headers()
+        
+        # 执行排序
+        self.apply_file_sort()
+        self.refresh_file_listbox()
+    
+    def update_column_headers(self):
+        """更新列标题显示排序状态"""
+        columns = ['序号', '文件名', '目录条数']
+        for col in columns:
+            if col == self.sort_column:
+                # 显示排序箭头
+                arrow = ' ↓' if self.sort_reverse else ' ↑'
+                self.file_treeview.heading(col, text=f"{col}{arrow}")
+            else:
+                # 清除其他列的箭头
+                self.file_treeview.heading(col, text=col)
+
+    def apply_file_sort(self):
+        """应用文件排序"""
+        if not self.filtered_file_list:
+            return
+        
+        # 根据选择的列进行排序
+        if self.sort_column == '序号':
+            # 按序号排序（实际上就是原始顺序）
+            pass  # filtered_file_list已经是按顺序的
+        elif self.sort_column == '文件名':
+            # 按文件名排序
+            self.filtered_file_list.sort(
+                key=lambda x: x['display_name'], 
+                reverse=self.sort_reverse
+            )
+        elif self.sort_column == '目录条数':
+            # 按目录条数排序
+            self.filtered_file_list.sort(
+                key=lambda x: x['item_count'], 
+                reverse=self.sort_reverse
+            )
+        
+        # 如果是序号列排序，需要特殊处理
+        if self.sort_column == '序号' and self.sort_reverse:
+            self.filtered_file_list.reverse()
+    
+    def refresh_file_listbox(self):
+        """刷新文件列表显示"""
+        # 清空现有数据
+        for item in self.file_treeview.get_children():
+            self.file_treeview.delete(item)
+        
+        # 添加数据到TreeView
+        for idx, file_info in enumerate(self.filtered_file_list, 1):
+            self.file_treeview.insert('', 'end', values=(
+                idx,  # 序号
+                file_info['display_name'],  # 文件名  
+                file_info['item_count']  # 目录条数
+            ))
+        
+        # 更新列标题显示
+        self.update_column_headers()
+        
+        # 恢复用户选择状态
+        self.restore_file_selection()
+    
+    def on_file_selection_changed(self, event):
+        """文件选择改变时的回调"""
+        selected_items = self.file_treeview.selection()
+        # 获取选择项的索引
+        self.selected_files = set()
+        for item in selected_items:
+            # 获取该项在TreeView中的索引
+            children = self.file_treeview.get_children()
+            if item in children:
+                idx = children.index(item)
+                self.selected_files.add(idx)
+
+    def select_all_files(self):
+        """全选文件"""
+        # 选择所有项
+        children = self.file_treeview.get_children()
+        self.file_treeview.selection_set(children)
+        self.selected_files = set(range(len(self.filtered_file_list)))
+
+    def deselect_all_files(self):
+        """取消全选"""
+        self.file_treeview.selection_remove(self.file_treeview.selection())
+        self.selected_files.clear()
+
+    def invert_selection(self):
+        """反选"""
+        children = self.file_treeview.get_children()
+        current_selection = set(self.file_treeview.selection())
+        all_items = set(children)
+        new_selection = all_items - current_selection
+        
+        # 清除当前选择
+        self.file_treeview.selection_remove(self.file_treeview.selection())
+        # 设置新选择
+        self.file_treeview.selection_set(list(new_selection))
+        
+        # 更新索引集合
+        self.selected_files = set()
+        for item in new_selection:
+            if item in children:
+                idx = children.index(item)
+                self.selected_files.add(idx)
+
+    def restore_file_selection(self):
+        """恢复文件选择状态"""
+        children = self.file_treeview.get_children()
+        items_to_select = []
+        for index in self.selected_files:
+            if index < len(children):
+                items_to_select.append(children[index])
+        
+        if items_to_select:
+            self.file_treeview.selection_set(items_to_select)
+    
     def refresh_printers(self):
         """刷新打印机列表"""
         try:
@@ -929,17 +1351,9 @@ class DirectoryGeneratorGUI(tk.Tk):
         self.current_task_thread.daemon = False
         self.current_task_thread.start()
         
-        # 添加取消按钮
-        if hasattr(self, 'cancel_button'):
-            self.cancel_button.pack(side=tk.LEFT, padx=2)
-        else:
-            self.cancel_button = ttk.Button(
-                self, 
-                text="取消", 
-                command=self.cancel_generation,
-                width=8
-            )
-            self.cancel_button.pack(side=tk.LEFT, padx=2)
+        # 显示取消按钮，隐藏开始按钮
+        self.start_button.pack_forget()
+        self.cancel_button.pack(side=tk.LEFT, padx=(5, 0))
     
     def cancel_generation(self):
         """取消当前正在运行的任务"""
@@ -948,9 +1362,8 @@ class DirectoryGeneratorGUI(tk.Tk):
             logging.info("用户请求取消任务")
             self.progress_label.config(text="正在取消...")
             
-            # 禁用取消按钮
-            if hasattr(self, 'cancel_button'):
-                self.cancel_button.config(state="disabled")
+            # 更新按钮状态（不禁用，显示取消中状态）
+            self.cancel_button.config(text="取消中...", state="disabled")
 
     def generation_controller(self):
         """
@@ -961,11 +1374,36 @@ class DirectoryGeneratorGUI(tk.Tk):
             if hasattr(self, 'cancel_flag') and self.cancel_flag.is_set():
                 logging.info("任务被用户取消")
                 return
-                
+            
+            # 检查转换模式
+            convert_mode = self.convert_mode_var.get()
+            
+            # 先获取基本参数
             recipe = self.recipe_var.get()
             params = {key: widget.get() for key, widget in self.paths.items()}
             params.update({key: widget.get() for key, widget in self.options.items()})
-
+            
+            if convert_mode == "selected":
+                # 获取选中的文件
+                if not self.selected_files:
+                    messagebox.showwarning("警告", "请选择要转换的文件")
+                    return
+                
+                # 获取选中文件的具体档号列表
+                selected_file_numbers = []
+                for index in self.selected_files:
+                    if index < len(self.filtered_file_list):
+                        file_number = self.filtered_file_list[index]['file_number']
+                        selected_file_numbers.append(file_number)
+                
+                if selected_file_numbers:
+                    logging.info(f"选择性转换模式：选中的档号 {selected_file_numbers}")
+                    # 将选中的档号列表传递给生成器
+                    params["selected_file_numbers"] = selected_file_numbers
+                else:
+                    messagebox.showwarning("警告", "未找到有效的选中文件")
+                    return
+            
             # 获取打印参数
             print_mode = self.print_mode_var.get()
             printer_name = self.printer_var.get() if print_mode in ["direct", "batch"] else None
@@ -1002,18 +1440,33 @@ class DirectoryGeneratorGUI(tk.Tk):
                     return
                     
                 self.update_progress(30, "正在生成全引目录...")
-                create_qy_full_index(
-                    jn_catalog_path=params["jn_catalog_path"],
-                    aj_catalog_path=params["aj_catalog_path"],
-                    template_path=params["template_path"],
-                    output_folder=params["output_folder"],
-                    start_file=params["start_file"],
-                    end_file=params["end_file"],
-                    direct_print=direct_print,
-                    printer_name=printer_name,
-                    print_copies=print_copies,
-                    cancel_flag=getattr(self, 'cancel_flag', None)
-                )
+                
+                # 存储当前执行上下文，供辅助方法使用
+                self._current_convert_mode = convert_mode
+                self._current_selected_file_numbers = selected_file_numbers
+                
+                # 使用特性标志控制的生成执行
+                if self.feature_manager.should_rollback("node_engine"):
+                    # 强制使用传统实现
+                    logging.info("Feature flag rollback: using legacy implementation only")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                elif self.feature_manager.should_use_shadow_mode("node_engine"):
+                    # 影子模式：同时运行两种实现并验证
+                    logging.info("Feature flag shadow mode: running both implementations")
+                    with self.feature_manager.shadow_execution(
+                        "node_engine",
+                        lambda: self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies),
+                        lambda: self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                    ) as result:
+                        pass  # 结果已经通过影子执行处理
+                elif self.feature_manager.is_enabled("node_engine"):
+                    # 使用新的节点引擎
+                    logging.info("Feature flag enabled: using node-based implementation")
+                    self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                else:
+                    # 使用传统实现（默认）
+                    logging.info("Feature flag disabled: using legacy implementation")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
             elif recipe == "案卷目录":
                 if not all(
                     [
@@ -1033,17 +1486,29 @@ class DirectoryGeneratorGUI(tk.Tk):
                     return
                     
                 self.update_progress(30, "正在生成案卷目录...")
-                create_aj_index(
-                    catalog_path=params["aj_catalog_path"],
-                    template_path=params["template_path"],
-                    output_folder=params["output_folder"],
-                    start_file=params["start_file"],
-                    end_file=params["end_file"],
-                    direct_print=direct_print,
-                    printer_name=printer_name,
-                    print_copies=print_copies,
-                    cancel_flag=getattr(self, 'cancel_flag', None)
-                )
+                
+                # 存储当前执行上下文
+                self._current_convert_mode = convert_mode
+                self._current_selected_file_numbers = selected_file_numbers
+                
+                # 使用特性标志控制的生成执行
+                if self.feature_manager.should_rollback("node_engine"):
+                    logging.info("Feature flag rollback: using legacy implementation only")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                elif self.feature_manager.should_use_shadow_mode("node_engine"):
+                    logging.info("Feature flag shadow mode: running both implementations")
+                    with self.feature_manager.shadow_execution(
+                        "node_engine",
+                        lambda: self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies),
+                        lambda: self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                    ) as result:
+                        pass
+                elif self.feature_manager.is_enabled("node_engine"):
+                    logging.info("Feature flag enabled: using node-based implementation")
+                    self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                else:
+                    logging.info("Feature flag disabled: using legacy implementation")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
             elif recipe in ["卷内目录", "简化目录"]:
                 # 根据不同的目录类型使用对应的路径
                 if recipe == "卷内目录":
@@ -1069,18 +1534,29 @@ class DirectoryGeneratorGUI(tk.Tk):
                     return
                     
                 self.update_progress(30, f"正在生成{recipe}...")
-                create_jn_or_jh_index(
-                    catalog_path=params[catalog_path_key],
-                    template_path=params["template_path"],
-                    output_folder=params["output_folder"],
-                    recipe_name=recipe,
-                    start_file=params["start_file"],
-                    end_file=params["end_file"],
-                    direct_print=direct_print,
-                    printer_name=printer_name,
-                    print_copies=print_copies,
-                    cancel_flag=getattr(self, 'cancel_flag', None)
-                )
+                
+                # 存储当前执行上下文
+                self._current_convert_mode = convert_mode
+                self._current_selected_file_numbers = selected_file_numbers
+                
+                # 使用特性标志控制的生成执行
+                if self.feature_manager.should_rollback("node_engine"):
+                    logging.info("Feature flag rollback: using legacy implementation only")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                elif self.feature_manager.should_use_shadow_mode("node_engine"):
+                    logging.info("Feature flag shadow mode: running both implementations")
+                    with self.feature_manager.shadow_execution(
+                        "node_engine",
+                        lambda: self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies),
+                        lambda: self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                    ) as result:
+                        pass
+                elif self.feature_manager.is_enabled("node_engine"):
+                    logging.info("Feature flag enabled: using node-based implementation")
+                    self._execute_node_based_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+                else:
+                    logging.info("Feature flag disabled: using legacy implementation")
+                    self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
 
             logging.info("任务成功完成！")
             
@@ -1145,13 +1621,129 @@ class DirectoryGeneratorGUI(tk.Tk):
             self.progress_var.set(0)
             self.progress_label.config(text="准备就绪")
             
-            # 移除取消按钮
-            if hasattr(self, 'cancel_button'):
-                self.cancel_button.pack_forget()
+            # 恢复按钮状态：隐藏取消按钮，显示开始按钮
+            self.cancel_button.pack_forget()
+            self.cancel_button.config(text="取消任务", state="normal")
+            self.start_button.pack(side=tk.LEFT)
                 
             # 清理取消标志
             if hasattr(self, 'cancel_flag'):
                 del self.cancel_flag
+
+
+    def _execute_legacy_generation(self, recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies):
+        """执行传统的目录生成实现。"""
+        if recipe == "全引目录":
+            self._execute_full_index_legacy(params, direct_print, printer_name, print_copies)
+        elif recipe == "案卷目录":
+            self._execute_case_index_legacy(params, direct_print, printer_name, print_copies)
+        elif recipe in ["卷内目录", "简化目录"]:
+            self._execute_volume_index_legacy(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+    
+    def _execute_node_based_generation(self, recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies):
+        """执行基于节点引擎的目录生成实现（占位符）。"""
+        logging.warning("Node-based implementation not yet available, falling back to legacy")
+        # 目前回退到传统实现，后续会在Task 4中实现真正的节点执行
+        self._execute_legacy_generation(recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies)
+    
+    def _execute_full_index_legacy(self, params, direct_print, printer_name, print_copies):
+        """执行传统的全引目录生成。"""
+        convert_mode = getattr(self, '_current_convert_mode', 'all')
+        selected_file_numbers = getattr(self, '_current_selected_file_numbers', [])
+        
+        if convert_mode == "selected" and selected_file_numbers:
+            for selected_file in selected_file_numbers:
+                create_qy_full_index(
+                    jn_catalog_path=params["jn_catalog_path"],
+                    aj_catalog_path=params["aj_catalog_path"],
+                    template_path=params["template_path"],
+                    output_folder=params["output_folder"],
+                    start_file=selected_file,
+                    end_file=selected_file,
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
+                )
+        else:
+            create_qy_full_index(
+                jn_catalog_path=params["jn_catalog_path"],
+                aj_catalog_path=params["aj_catalog_path"],
+                template_path=params["template_path"],
+                output_folder=params["output_folder"],
+                start_file=params["start_file"],
+                end_file=params["end_file"],
+                direct_print=direct_print,
+                printer_name=printer_name,
+                print_copies=print_copies,
+                cancel_flag=getattr(self, 'cancel_flag', None)
+            )
+    
+    def _execute_case_index_legacy(self, params, direct_print, printer_name, print_copies):
+        """执行传统的案卷目录生成。"""
+        convert_mode = getattr(self, '_current_convert_mode', 'all')
+        selected_file_numbers = getattr(self, '_current_selected_file_numbers', [])
+        
+        if convert_mode == "selected" and selected_file_numbers:
+            for selected_file in selected_file_numbers:
+                create_aj_index(
+                    catalog_path=params["aj_catalog_path"],
+                    template_path=params["template_path"],
+                    output_folder=params["output_folder"],
+                    start_file=selected_file,
+                    end_file=selected_file,
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
+                )
+        else:
+            create_aj_index(
+                catalog_path=params["aj_catalog_path"],
+                template_path=params["template_path"],
+                output_folder=params["output_folder"],
+                start_file=params["start_file"],
+                end_file=params["end_file"],
+                direct_print=direct_print,
+                printer_name=printer_name,
+                print_copies=print_copies,
+                cancel_flag=getattr(self, 'cancel_flag', None)
+            )
+    
+    def _execute_volume_index_legacy(self, recipe, params, convert_mode, selected_file_numbers, direct_print, printer_name, print_copies):
+        """执行传统的卷内/简化目录生成。"""
+        if recipe == "卷内目录":
+            catalog_path_key = "jn_catalog_path"
+        else:  # 简化目录
+            catalog_path_key = "jh_catalog_path"
+        
+        if convert_mode == "selected" and selected_file_numbers:
+            for selected_file in selected_file_numbers:
+                create_jn_or_jh_index(
+                    catalog_path=params[catalog_path_key],
+                    template_path=params["template_path"],
+                    output_folder=params["output_folder"],
+                    recipe_name=recipe,
+                    start_file=selected_file,
+                    end_file=selected_file,
+                    direct_print=direct_print,
+                    printer_name=printer_name,
+                    print_copies=print_copies,
+                    cancel_flag=getattr(self, 'cancel_flag', None)
+                )
+        else:
+            create_jn_or_jh_index(
+                catalog_path=params[catalog_path_key],
+                template_path=params["template_path"],
+                output_folder=params["output_folder"],
+                recipe_name=recipe,
+                start_file=params["start_file"],
+                end_file=params["end_file"],
+                direct_print=direct_print,
+                printer_name=printer_name,
+                print_copies=print_copies,
+                cancel_flag=getattr(self, 'cancel_flag', None)
+            )
 
 
 if __name__ == "__main__":
