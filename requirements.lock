@@ -1,0 +1,28 @@
+# ADG项目精确版本依赖锁定文件
+# 此文件锁定了经过测试验证的稳定版本
+# 生成时间: 2025-08-17
+# Python版本: 3.x
+
+# 核心依赖 - 精确版本
+pandas==2.2.1
+xlwings==0.30.12
+openpyxl==3.1.2
+pywin32==306
+Pillow==10.2.0
+
+# GUI和用户界面
+Gooey==1.0.8.1
+colored==1.4.4
+
+# 开发和测试依赖 (可选安装)
+# pip install -r requirements-dev.txt
+
+# 使用说明:
+# 生产环境: pip install -r requirements.lock
+# 开发环境: pip install -r requirements.txt (允许版本范围)
+#
+# 版本更新流程:
+# 1. 在开发环境测试新版本
+# 2. 运行完整测试套件
+# 3. 更新此文件的版本号
+# 4. 提交版本控制

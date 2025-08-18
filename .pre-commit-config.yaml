@@ -1,0 +1,107 @@
+# ADG项目Git预提交钩子配置
+# 安装: pre-commit install
+# 手动运行: pre-commit run --all-files
+
+repos:
+  # Python代码格式化
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+        exclude: ^(\.bmad-core/|tests/.*fixtures.*\.py)$
+
+  # 导入排序
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=88]
+        exclude: ^(\.bmad-core/)$
+
+  # 代码质量检查
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: 
+          - --max-line-length=88
+          - --extend-ignore=E203,W503,E501
+          - --exclude=.bmad-core,__pycache__,*.pyc
+        exclude: ^(\.bmad-core/)$
+
+  # 基础文件检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(\.bmad-core/|.*\.md)$
+      - id: end-of-file-fixer
+        exclude: ^(\.bmad-core/)$
+      - id: check-yaml
+        exclude: ^(\.bmad-core/)$
+      - id: check-json
+        exclude: ^(\.bmad-core/)$
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+
+  # Python语法检查
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.0.3
+    hooks:
+      - id: pylint
+        args: 
+          - --disable=C0114,C0115,C0116  # 忽略文档字符串要求
+          - --max-line-length=88
+        exclude: ^(\.bmad-core/|tests/)$
+        additional_dependencies: [pylint-django]
+
+# 特定于Windows的配置
+default_language_version:
+  python: python3
+
+fail_fast: false  # 继续运行其他钩子即使某个失败
+
+# 仓库配置
+repos:
+  # 本地钩子 - ADG项目特定检查
+  - repo: local
+    hooks:
+      - id: adg-import-check
+        name: ADG Import Path Validation
+        entry: python -c "
+import sys, re, os
+for f in sys.argv[1:]:
+    if not f.endswith('.py'): continue
+    with open(f, 'r', encoding='utf-8') as file:
+        content = file.read()
+        # 检查相对导入路径
+        if re.search(r'from \.\.|import \.\.', content):
+            print(f'错误: {f} 包含相对导入，请使用绝对导入')
+            sys.exit(1)
+        # 检查Windows路径分隔符
+        if '\\\\' in content:
+            print(f'警告: {f} 包含硬编码Windows路径，建议使用os.path.join')
+"
+        language: python
+        files: \.py$
+        exclude: ^(\.bmad-core/)$
+
+      - id: adg-config-validation
+        name: ADG Configuration File Validation  
+        entry: python -c "
+import sys, json
+for f in sys.argv[1:]:
+    if not f.endswith('.json'): continue
+    try:
+        with open(f, 'r', encoding='utf-8') as file:
+            json.load(file)
+    except json.JSONDecodeError as e:
+        print(f'错误: {f} JSON格式无效: {e}')
+        sys.exit(1)
+"
+        language: python
+        files: \.json$
+        exclude: ^(\.bmad-core/)$

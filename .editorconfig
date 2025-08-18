@@ -1,0 +1,34 @@
+# ADG项目编辑器配置
+# 支持大多数IDE和编辑器的统一代码风格
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf  # Windows项目使用CRLF
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.py]
+indent_size = 4
+max_line_length = 88
+
+[*.{json,yaml,yml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[Makefile]
+indent_style = tab
+
+# 忽略第三方和生成的文件
+[{.bmad-core/**,node_modules/**,venv/**,env/**}]
+indent_style = unset
+indent_size = unset
